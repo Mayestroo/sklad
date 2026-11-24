@@ -3,9 +3,8 @@
 import { DecimalInput } from '@/components/ui/DecimalInput';
 import { useTranslations } from 'next-intl';
 import { useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, Plus, Save, Trash2 } from 'lucide-react';
+import { AlertTriangle, Plus, Save, Trash2, Factory } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useConfirm } from '@/context/ConfirmContext';
 import { apiFetch } from '@/lib/api';
 import { errorMessage, formatCurrency, formatQuantity } from '@/lib/utils';
 import { unitLabel } from '@/lib/units';
@@ -65,7 +64,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
   const { locale, document: doc, recipes } = props;
   const t = useTranslations('production');
   const { token, company } = useAuth();
-  const confirm = useConfirm();
 
   const activeRecipes = useMemo(() => recipes.filter((r) => r.isActive && !r.isArchived), [recipes]);
   const initialRecipe = doc ? recipes.find((r) => r.id === doc.recipeId) : activeRecipes.find((r) => r.id === props.initialRecipeId);
@@ -88,8 +86,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [dirty, setDirty] = useState(false);
-  const touch = () => setDirty(true);
 
   // Products that have an active recipe, then that product's active recipes (TZ 4.5).
   const productOptions: SelectOption[] = useMemo(() => {
@@ -174,7 +170,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
         locale,
         body: JSON.stringify(body),
       });
-      setDirty(false);
       await props.onSaved(saved, doc ? t('hujjatSaqlandi') : t('ishlabChiqarishHujjatiQoralamasiYaratildi'));
     } catch (error) {
       setFormError(errorMessage(error) || t('hujjatniSaqlabBolmadi'));
@@ -183,18 +178,9 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
     }
   };
 
-  const requestClose = async () => {
+  // Asking before losing typed input is the dialog's job (backdrop, Esc, ✕ and Cancel all go through it).
+  const requestClose = () => {
     if (busy) return;
-    if (dirty) {
-      const ok = await confirm({
-        title: t('saqlamasdanYopilsinmi'),
-        description: t('kiritilganMalumotlarYoqoladi'),
-        variant: 'warning',
-        confirmText: t('yopish'),
-        cancelText: t('davomEtish'),
-      });
-      if (!ok) return;
-    }
     props.onClose();
   };
 
@@ -211,20 +197,19 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
     ) : null;
 
   return (
-    <Modal
+    <Modal icon={<Factory size={20} />} description={t('docDialogDesc')}
       isOpen
-      onClose={() => void requestClose()}
+      onClose={() => requestClose()}
       onSubmitShortcut={() => void submit()}
       title={doc ? `${doc.docNumber} · ${t('tahrirlash2')}` : t('yangiIshlabChiqarishHujjati')}
       size="xl"
       footer={
         <>
-          <Button type="button" variant="outline" onClick={() => void requestClose()} disabled={busy}>
-            {t('bekorQilish')} <kbd style={{ fontSize: 11, opacity: 0.7 }}>Esc</kbd>
+          <Button data-dialog-cancel type="button" variant="outline" onClick={() => requestClose()} disabled={busy}>
+            {t('bekorQilish')}
           </Button>
           <Button type="button" onClick={() => void submit()} disabled={busy} aria-busy={busy}>
-            <Save size={15} aria-hidden /> {busy ? t('saqlanmoqda') : doc ? t('saqlash') : t('qoralamaYaratish')}{' '}
-            <kbd style={{ fontSize: 11, opacity: 0.8 }}>Ctrl+Enter</kbd>
+            <Save size={15} aria-hidden /> {busy ? t('saqlanmoqda') : doc ? t('saqlash') : t('qoralamaYaratish')}
           </Button>
         </>
       }
@@ -236,7 +221,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
           e.preventDefault();
           void submit();
         }}
-        onInput={touch}
         style={{ display: 'flex', flexDirection: 'column', gap: 16 }}
       >
         {formError && (
@@ -244,6 +228,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
             <AlertTriangle size={16} aria-hidden /> {formError}
           </div>
         )}
+        <h3 className="dlg-section" style={{ margin: 0, padding: 0, borderTop: 'none' }}>{t('docSectionWhat')}</h3>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12, alignItems: 'start' }}>
           <div data-invalid={Boolean(errors.product)}>
             <Select
@@ -252,7 +237,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
               options={productOptions}
               value={productId}
               onChange={(value) => {
-                touch();
                 setProductId(value);
                 const own = activeRecipes.filter((r) => r.productId === value);
                 setRecipeId(own.length === 1 ? own[0].id : '');
@@ -272,7 +256,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
               }))}
               value={recipeId}
               onChange={(value) => {
-                touch();
                 setRecipeId(value);
               }}
               disabled={!productId}
@@ -282,24 +265,31 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
           </div>
           <div>
             {label(`${t('rejaBoyichaMiqdor')} *`, 'doc-qty')}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <DecimalInput id="doc-qty" value={quantity} invalid={Boolean(errors.quantity)} onValueChange={setQuantity} />
-              <span style={{ color: 'var(--color-text-secondary)' }}>{recipe ? productUnit : ''}</span>
+            <div style={{ position: 'relative' }}>
+              <DecimalInput id="doc-qty" value={quantity} invalid={Boolean(errors.quantity)} onValueChange={setQuantity} style={{ paddingRight: recipe ? 64 : undefined }} />
+              {recipe && (
+                <span aria-hidden style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', pointerEvents: 'none' }}>
+                  {productUnit}
+                </span>
+              )}
             </div>
             {err('quantity')}
           </div>
+        </div>
+        <h3 className="dlg-section" style={{ margin: 0 }}>{t('docSectionWhereWhen')}</h3>
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 12, alignItems: 'start' }}>
           <div>
-            <DatePicker label={`${t('sana')} *`} value={docDate} onChange={(value) => { touch(); setDocDate(value); }} error={errors.date || undefined} />
+            <DatePicker label={`${t('sana')} *`} value={docDate} onChange={(value) => setDocDate(value)} error={errors.date || undefined} />
           </div>
           <div data-invalid={Boolean(errors.warehouse)}>
-            <Select label={`${t('xomashyoOmbori')} *`} options={props.warehouseOptions} value={warehouseId} onChange={(value) => { touch(); setWarehouseId(value); }} error={errors.warehouse || undefined} />
+            <Select label={`${t('xomashyoOmbori')} *`} options={props.warehouseOptions} value={warehouseId} onChange={(value) => setWarehouseId(value)} error={errors.warehouse || undefined} />
           </div>
           <div>
             <Select
               label={t('tayyorMahsulotOmbori')}
               options={[{ value: '', label: t('xomashyoOmboriBilanBirXil') }, ...props.warehouseOptions]}
               value={outputWarehouseId}
-              onChange={(value) => { touch(); setOutputWarehouseId(value); }}
+              onChange={(value) => setOutputWarehouseId(value)}
             />
           </div>
           <div>
@@ -308,7 +298,7 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
               searchable
               options={[{ value: '', label: t('tanlanmagan') }, ...props.staffOptions]}
               value={responsibleId}
-              onChange={(value) => { touch(); setResponsibleId(value); }}
+              onChange={(value) => setResponsibleId(value)}
             />
           </div>
           <div>
@@ -317,7 +307,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
               from={startDate}
               to={endDate}
               onChange={(from, to) => {
-                touch();
                 setStartDate(from);
                 setEndDate(to);
               }}
@@ -401,7 +390,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
                 options={COST_TYPES.map((type) => ({ value: type, label: t(`cost${type}`) }))}
                 value={cost.costType}
                 onChange={(value) => {
-                  touch();
                   setCosts((rows) => rows.map((r) => (r.key === cost.key ? { ...r, costType: value as CostType } : r)));
                 }}
               />
@@ -423,7 +411,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
                 aria-label={`${t('xarajatniOchirish')} ${i + 1}`}
                 title={t('xarajatniOchirish')}
                 onClick={() => {
-                  touch();
                   setCosts((rows) => rows.filter((r) => r.key !== cost.key));
                 }}
                 style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-700)', cursor: 'pointer' }}
@@ -438,7 +425,6 @@ export function ProductionDocumentFormModal(props: ProductionDocumentFormModalPr
               variant="outline"
               size="sm"
               onClick={() => {
-                touch();
                 setCosts((rows) => [...rows, { key: ++costKey, costType: 'SALARY', amount: '', comment: '' }]);
               }}
             >

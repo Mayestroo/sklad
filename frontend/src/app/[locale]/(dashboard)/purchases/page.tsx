@@ -10,36 +10,21 @@ import { apiFetch, listOf, type ListResponse } from '@/lib/api';
 import { formatCurrency, formatDate, formatDateTime, errorMessage, type LocalizedName } from '@/lib/utils';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { Button, buttonStyle } from '@/components/ui/Button';
-import { Select, SelectOption } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchField } from '@/components/ui/SearchField';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { toast } from '@/context/ToastContext';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { totalsByCurrency } from '@/lib/currency-totals';
 import { usePersistentState } from '@/lib/usePersistentState';
-import {
-  ActiveFilters,
-  ALL_TIME,
-  ChipGroup,
-  ColumnChooser,
-  CurrencyTotals,
-  MoreFiltersButton,
-  PeriodFilter,
-  resolvePeriod,
-  Signal,
-  SignalStrip,
-  useListFilters,
-  type ActiveFilter,
-  type PeriodValue,
-} from '@/components/ui/list/ListKit';
+import { CurrencyTotals } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, periodRange, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { Facts, PaidProgress, PreviewHead, SectionTitle } from '@/components/ui/list/Preview';
-import { CreditCard, Plus, RotateCcw, Truck, ExternalLink } from 'lucide-react';
+import { CreditCard, Plus, RotateCcw, Truck, ExternalLink, FileText, Trash2 } from 'lucide-react';
 import { PurchaseReceipt, PurchaseSummaryStats } from '@shared/types';
 import { PayPurchaseModal } from '@/components/purchases/PayPurchaseModal';
 import { CreateReturnModal } from '@/components/purchases/CreateReturnModal';
@@ -69,7 +54,7 @@ const FILTER_DEFAULTS = {
   currency: '',
   counterpartyId: '',
   warehouseId: '',
-  period: ALL_TIME as PeriodValue,
+  period: '',
 };
 
 /** GET /purchases/receipts with the non-empty filters. */
@@ -94,14 +79,13 @@ export default function PurchasesPage() {
   const td = useTranslations('rd.doc');
   const ts = useTranslations('rd.purchases');
 
-  // Filters apply at once and are remembered; a link may open the list pre-filtered (?status=DRAFT).
-  const [filters, setFilters, resetFilters] = useListFilters('purchases.list', FILTER_DEFAULTS, ['status', 'paymentStatus']);
-  const [search, setSearch] = useState('');
-  const debouncedSearch = useDebouncedValue(search.trim(), 350);
-  const [moreOpen, setMoreOpen] = useState(false);
+  // Filters live in the URL and are remembered per user; a link may open the list pre-filtered (?status=DRAFT).
+  const lf = useFilterState('purchases.list', FILTER_DEFAULTS);
+  const filters = lf.values;
+  const debouncedSearch = lf.debouncedSearch;
   const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('purchases.list.hidden', []);
   const [sort, setSort] = usePersistentState<SortState | null>('purchases.list.sort', null);
-  const range = resolvePeriod(filters.period);
+  const range = periodRange(filters.period);
 
   const invoicesEndpoint = useMemo(
     () =>
@@ -255,34 +239,16 @@ export default function PurchasesPage() {
     },
   ];
 
-  const customerOptions: SelectOption[] = [{ value: '', label: ts('anySupplier') }, ...counterparties.map((c) => ({ value: c.id, label: c.name }))];
-  const warehouseOptions: SelectOption[] = [{ value: '', label: tl('anyWarehouse') }, ...warehouses.map((w) => ({ value: w.id, label: nameOf(w.name) }))];
-
-  const statusOptions = [
-    { value: '', label: tl('all') },
-    { value: 'DRAFT', label: td('draft') },
-    { value: 'POSTED', label: td('posted') },
-    { value: 'CANCELLED', label: td('cancelled') },
+  const filterDefs: FilterDef[] = [
+    { key: 'status', kind: 'segmented', label: tl('status'), options: [{ value: 'DRAFT', label: td('draft') }, { value: 'POSTED', label: td('posted') }, { value: 'CANCELLED', label: td('cancelled') }] },
+    { key: 'paymentStatus', kind: 'select', label: tl('payment'), options: [{ value: 'UNPAID', label: td('unpaid') }, { value: 'PARTIALLY_PAID', label: td('partial') }, { value: 'PAID', label: td('paid') }] },
+    { key: 'counterpartyId', kind: 'select', label: ts('supplier'), searchable: true, options: counterparties.map((c) => ({ value: c.id, label: c.name })) },
+    { key: 'warehouseId', kind: 'select', label: tl('warehouse'), options: warehouses.map((w) => ({ value: w.id, label: nameOf(w.name) })) },
+    { key: 'currency', kind: 'select', label: ts('currency'), options: CURRENCY_OPTIONS },
+    { key: 'period', kind: 'period', label: tl('period') },
   ];
-  const paymentOptions = [
-    { value: 'UNPAID', label: td('unpaid') },
-    { value: 'PARTIALLY_PAID', label: td('partial') },
-    { value: 'PAID', label: td('paid') },
-  ];
-
-  const active: ActiveFilter[] = [];
-  if (debouncedSearch) active.push({ key: 'q', label: `«${debouncedSearch}»`, onClear: () => setSearch('') });
-  if (filters.counterpartyId) active.push({ key: 'c', label: counterparties.find((c) => c.id === filters.counterpartyId)?.name ?? ts('supplier'), onClear: () => setFilters({ counterpartyId: '' }) });
-  if (filters.currency) active.push({ key: 'cur', label: filters.currency, onClear: () => setFilters({ currency: '' }) });
-  if (filters.warehouseId) active.push({ key: 'w', label: nameOf(warehouses.find((w) => w.id === filters.warehouseId)?.name), onClear: () => setFilters({ warehouseId: '' }) });
-  const moreCount = (filters.counterpartyId ? 1 : 0) + (filters.warehouseId ? 1 : 0) + (filters.currency ? 1 : 0);
-  const anyFilter = Boolean(debouncedSearch || filters.currency || filters.status || filters.paymentStatus || filters.counterpartyId || filters.warehouseId || filters.period.key !== 'all');
-  const clearAll = () => {
-    setSearch('');
-    resetFilters();
-  };
-
-  const unpaidOnly = filters.status === 'POSTED' && filters.paymentStatus === 'UNPAID';
+  const anyFilter = Boolean(debouncedSearch || lf.activeCount > 0);
+  const clearAll = lf.reset;
 
   return (
     <div className="rd-page">
@@ -296,61 +262,25 @@ export default function PurchasesPage() {
         }
       />
 
-      {/* Numbers that are also filters */}
-      <SignalStrip label={tl('summary')}>
-        <Signal
-          tone="error"
+      <StatCardGrid label={tl('summary')} count={4}>
+        <StatCard
           label={ts('sigDebt')}
-          value={stats?.totalSupplierDebtByCurrency?.some((i) => i.amount !== 0) ? <MultiCurrencyValue items={stats.totalSupplierDebtByCurrency} locale={locale} /> : formatCurrency(0, locale, 'UZS')}
-          hint={ts('sigDebtHint', { count: stats?.suppliersWithDebtCount ?? 0 })}
-          active={unpaidOnly}
-          onClick={() => setFilters(unpaidOnly ? { status: '', paymentStatus: '' } : { status: 'POSTED', paymentStatus: 'UNPAID' })}
+          loading={statsQuery.isPending}
+          value={stats?.totalSupplierDebtByCurrency?.some((i) => i.amount !== 0) ? <MultiCurrencyValue inherit items={stats.totalSupplierDebtByCurrency} locale={locale} /> : formatCurrency(0, locale, 'UZS')}
+          secondary={ts('sigDebtHint', { count: stats?.suppliersWithDebtCount ?? 0 })}
         />
-        <Signal
-          tone="warning"
-          label={ts('sigDrafts')}
-          value={draftCount}
-          hint={ts('sigDraftsHint')}
-          active={filters.status === 'DRAFT'}
-          onClick={() => setFilters({ status: filters.status === 'DRAFT' ? '' : 'DRAFT', paymentStatus: '' })}
-        />
-        <Signal tone="info" label={ts('sigMonth')} value={<MultiCurrencyValue items={stats?.monthlyPurchasesByCurrency} locale={locale} />} hint={ts('sigMonthHint', { count: stats?.monthlyPurchasesCount ?? 0 })} />
-        <Signal tone="neutral" label={ts('sigReturns')} value={<MultiCurrencyValue items={stats?.monthlyReturnsByCurrency} locale={locale} />} hint={ts('sigReturnsHint', { count: stats?.monthlyReturnsCount ?? 0 })} />
-      </SignalStrip>
+        <StatCard label={ts('sigDrafts')} loading={draftsQuery.isPending} value={draftCount} secondary={ts('sigDraftsHint')} />
+        <StatCard label={ts('sigMonth')} loading={statsQuery.isPending} value={<MultiCurrencyValue inherit items={stats?.monthlyPurchasesByCurrency} locale={locale} />} secondary={ts('sigMonthHint', { count: stats?.monthlyPurchasesCount ?? 0 })} />
+        <StatCard label={ts('sigReturns')} loading={statsQuery.isPending} value={<MultiCurrencyValue inherit items={stats?.monthlyReturnsByCurrency} locale={locale} />} secondary={ts('sigReturnsHint', { count: stats?.monthlyReturnsCount ?? 0 })} />
+      </StatCardGrid>
 
-      {/* Search · status · payment · period · more */}
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={ts('searchPh')} label={tl('search')} />
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup label={tl('status')} showLabel options={statusOptions} value={filters.status} onChange={(v) => setFilters({ status: v })} />
-          <ChipGroup label={tl('payment')} showLabel options={paymentOptions} value={filters.paymentStatus} onChange={(v) => setFilters({ paymentStatus: v })} />
-        </div>
-        <div className="rd-toolbar-row">
-          <PeriodFilter value={filters.period} onChange={(p) => setFilters({ period: p })} locale={locale} />
-          <span className="rd-toolbar-spacer" />
-          <MoreFiltersButton open={moreOpen} onToggle={() => setMoreOpen((o) => !o)} activeCount={moreCount} controls="purchases-more" />
-        </div>
-        {moreOpen && (
-          <div id="purchases-more" className="rd-more-panel">
-            <div>
-              <span className="rd-field-label">{ts('supplier')}</span>
-              <Select options={customerOptions} value={filters.counterpartyId} onChange={(v) => setFilters({ counterpartyId: v })} searchable />
-            </div>
-            <div>
-              <span className="rd-field-label">{tl('warehouse')}</span>
-              <Select options={warehouseOptions} value={filters.warehouseId} onChange={(v) => setFilters({ warehouseId: v })} />
-            </div>
-            <div>
-              <span className="rd-field-label">{ts('currency')}</span>
-              <Select options={[{ value: '', label: ts('anyCurrency') }, ...CURRENCY_OPTIONS]} value={filters.currency} onChange={(v) => setFilters({ currency: v })} />
-            </div>
-          </div>
-        )}
-        <ActiveFilters items={active} onClearAll={clearAll} />
-      </div>
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={ts('searchPh')}
+        resultCount={invoicesQuery.isPending ? null : invoices.length}
+        columns={<ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {invoicesQuery.isError ? (
@@ -389,7 +319,7 @@ export default function PurchasesPage() {
 
       {/* Row preview: check a sale without leaving the list */}
       {preview && (
-        <Drawer
+        <Drawer icon={<FileText size={20} />}
           isOpen
           onClose={() => setPreviewId(null)}
           title={ts('previewTitle', { number: numberOf(preview) })}
@@ -511,7 +441,7 @@ export default function PurchasesPage() {
 
       {/* Delete confirmation (posted documents are unposted first) */}
       {deletingInvoice && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           onClose={() => setDeletingInvoice(null)}
           title={
@@ -525,6 +455,16 @@ export default function PurchasesPage() {
                   : 'Bekor qilingan hujjatni o‘chirish'
                 : ts('deleteTitleDraft')
           }
+          footer={
+            <>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="danger" onClick={handleDeleteInvoice} loading={deleteLoading} loadingText={isRu ? 'Удаление...' : 'O‘chirilmoqda...'}>
+                {isRu ? 'Удалить' : 'O‘chirish'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
@@ -532,14 +472,6 @@ export default function PurchasesPage() {
                 ? tIn('p0_raqamli_xarid_hujjati_tasdiql', { p0: numberOf(deletingInvoice) })
                 : tIn('haqiqatan_ham_p0_raqamli_xarid_h', { p0: numberOf(deletingInvoice) })}
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="danger" onClick={handleDeleteInvoice} loading={deleteLoading} loadingText={isRu ? 'Удаление...' : 'O‘chirilmoqda...'}>
-                {isRu ? 'Удалить' : 'O‘chirish'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}

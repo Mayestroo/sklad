@@ -461,7 +461,18 @@
     "avvalOmborYarating": "Ishlab chiqarishni rasmiylashtirish uchun avval ombor yarating:",
     "filiallarVaOmborlar": "Filiallar va omborlar",
     "hujjatlarBoshHolatIzohi": "Hujjat qaysi mahsulotdan qancha ishlab chiqarilganini qayd etadi: xomashyo ombordan chiqadi, tayyor mahsulot tannarx bilan kirim bo‘ladi. Avval mahsulot uchun retseptura kerak.",
-    "retsepturaBoshHolatIzohi": "Retseptura bir birlik tayyor mahsulotga qancha xomashyo ketishini aytadi. Undan keyin ishlab chiqarish hujjatini rasmiylashtirish mumkin."
+    "retsepturaBoshHolatIzohi": "Retseptura bir birlik tayyor mahsulotga qancha xomashyo ketishini aytadi. Undan keyin ishlab chiqarish hujjatini rasmiylashtirish mumkin.",
+    "recipeDialogDesc": "Tayyor mahsulot uchun qancha xomashyo ketishini kiriting — tannarx avtomatik hisoblanadi",
+    "recipeSectionProduct": "Mahsulot",
+    "recipeSectionMaterials": "Xomashyolar",
+    "recipeSectionCost": "Taxminiy tannarx",
+    "chiqadiganMiqdor": "Chiqadigan miqdor",
+    "outputHint": "Quyidagi sarf shu miqdor uchun",
+    "faolRetsepturaHint": "Faqat faol retsepturani ishlab chiqarish hujjatida tanlash mumkin",
+    "costHintShort": "Xomashyo kartalaridagi joriy narx bo‘yicha. Haqiqiy tannarx ishlab chiqarishda FIFO partiyalaridan olinadi.",
+    "docDialogDesc": "Qoralama sifatida saqlanadi — xomashyo ishlab chiqarish boshlanganda hisobdan chiqadi",
+    "docSectionWhat": "Nima ishlab chiqariladi",
+    "docSectionWhereWhen": "Qayerda va qachon"
   },
   "ux": {
     "openMenu": "Menyuni ochish",
@@ -684,13 +695,13 @@
       "subtitle": "Mijoz buyurtmalari: qabul qilish, yig‘ish, jo‘natish va to‘lov",
       "newOrder": "Yangi buyurtma",
       "sigNew": "Qabul qilinishi kerak",
-      "sigNewHint": "Yangi va tasdiqlashdagi — bosing: ko‘rsatish",
+      "sigNewHint": "Yangi va tasdiqlashdagi",
       "sigReady": "Jo‘natishga tayyor",
-      "sigReadyHint": "Bosing: ko‘rsatish",
+      "sigReadyHint": "Yig‘ilgan, jo‘natishni kutmoqda",
       "sigActive": "Ishdagi buyurtmalar",
       "sigActiveHint": "Hali jo‘natilmagan",
       "sigOverdue": "Yetkazish muddati o‘tgan",
-      "sigOverdueHint": "Ko‘rsatilgan buyurtmalar orasida — bosing: faqat shular",
+      "sigOverdueHint": "Ko‘rsatilgan buyurtmalar orasida",
       "stage": "Bosqich",
       "searchPh": "Buyurtma raqami yoki mijoz",
       "customer": "Mijoz",
@@ -725,7 +736,7 @@
       "quickNone": "Bunday tasdiqlangan sotuv topilmadi",
       "returnThis": "Qaytarish",
       "sigDrafts": "Tasdiqlanmagan",
-      "sigDraftsHint": "Qoralamalar — bosing: ko‘rsatish",
+      "sigDraftsHint": "Qoralamalar",
       "sigMonth": "Shu oy qaytarildi",
       "sigMonthHint": "Tasdiqlangan qaytarishlar",
       "sigAll": "Jami hujjatlar",
@@ -740,9 +751,9 @@
       "subtitle": "Yetkazib beruvchidan kelgan tovarlar: kimdan, qancha, to‘langanmi",
       "newSale": "Yangi kirim",
       "sigDebt": "Yetkazib beruvchilarga qarz",
-      "sigDebtHint": "{count, plural, other {# ta yetkazib beruvchi}} — bosing: to‘lanmaganlar",
+      "sigDebtHint": "{count, plural, other {# ta yetkazib beruvchi}}",
       "sigDrafts": "O‘tkazilmagan",
-      "sigDraftsHint": "Qoralamalar — bosing: ko‘rsatish",
+      "sigDraftsHint": "Qoralamalar",
       "sigMonth": "Shu oy kirim",
       "sigMonthHint": "{count, plural, other {# ta hujjat}}",
       "sigReturns": "Shu oy qaytarilgan",
@@ -759,7 +770,6 @@
     },
     "expenses": {
       "subtitle": "Transport, bojxona va boshqa xarajatlar — kirim tannarxiga taqsimlanadi",
-      "clickToFilter": "Bosing: faqat shu tur",
       "allHint": "Barcha turlar bo‘yicha, valyutalar alohida",
       "type": "Turi",
       "provider": "Xizmat ko‘rsatuvchi",
@@ -781,7 +791,7 @@
       "receipt": "Kirim hujjati",
       "reason": "Sabab",
       "sigDrafts": "Tasdiqlanmagan",
-      "sigDraftsHint": "Qoralamalar — bosing: ko‘rsatish",
+      "sigDraftsHint": "Qoralamalar",
       "postedCount": "{count, plural, other {# ta tasdiqlangan}}",
       "sigAll": "Jami hujjatlar",
       "searchPh": "Qaytarish raqami, yetkazib beruvchi yoki sabab",
@@ -793,8 +803,8 @@
       "pay": "To‘lash",
       "collect": "To‘lov olish",
       "profile": "Profil va tarix",
-      "owedHint": "{count, plural, other {# tasiga qarzmiz}} — bosing: faqat ular",
-      "owesUsHint": "{count, plural, other {# ta mijoz qarzdor}} — bosing: faqat ular",
+      "owedHint": "{count, plural, other {# tasiga qarzmiz}}",
+      "owesUsHint": "{count, plural, other {# ta mijoz qarzdor}}",
       "show": "Ko‘rsatish",
       "withDebt": "Qarzi borlar",
       "rowHint": "Qatorni bosing — profil, qarz va tarix yon panelda ochiladi.",
@@ -808,9 +818,9 @@
       "low": "minimal {min} dan kam",
       "setPrice": "Narx qo‘yish",
       "sigLow": "Kam qolgan",
-      "sigLowHint": "Qoldiq minimaldan kam — bosing: ko‘rsatish",
+      "sigLowHint": "Qoldiq minimaldan kam",
       "sigNoPrice": "Sotuv narxi yo‘q",
-      "sigNoPriceHint": "Sotuvda narxni qo‘lda yozishga to‘g‘ri keladi — bosing",
+      "sigNoPriceHint": "Sotuvda narxni qo‘lda yozishga to‘g‘ri keladi",
       "searchPh": "Nomi, SKU yoki shtrix-kod (skaner ham ishlaydi)",
       "none": "Katalog hali bo‘sh",
       "noneHint": "Birinchi tovarni qo‘shing yoki boshlang‘ich qoldiqlardan import qiling.",
@@ -822,7 +832,8 @@
       "preview": "Sotuvda shunday ko‘rinadi",
       "noName": "Nomi hali yo‘q",
       "noPrice": "Narx belgilanmagan",
-      "barcode": "Shtrix-kod"
+      "barcode": "Shtrix-kod",
+      "attention": "Diqqat talab"
     },
     "inv": {
       "subtitle": "Har bir ombordagi qoldiq: nima tugayapti, nima umuman yo‘q",
@@ -836,9 +847,9 @@
       "inStock": "Bor",
       "stockFilter": "Qoldiq",
       "sigLow": "Kam qolgan",
-      "sigLowHint": "Minimaldan kam — bosing: ko‘rsatish",
+      "sigLowHint": "Minimaldan kam",
       "sigZero": "Umuman qolmagan",
-      "sigZeroHint": "Qoldiq 0 — bosing: ko‘rsatish",
+      "sigZeroHint": "Qoldiq 0",
       "sigItems": "Tovar pozitsiyalari",
       "sigItemsHint": "Xizmatlarsiz",
       "sigWarehouses": "Omborlar",
@@ -897,7 +908,7 @@
     "services": {
       "newProvided": "Mijozga xizmat akti",
       "newReceived": "Olingan xizmat akti",
-      "debtHint": "Bosing: tasdiqlangan, lekin to‘lanmagan aktlar"
+      "debtHint": "Tasdiqlangan, lekin to‘lanmagan aktlar"
     },
     "production": {
       "flow": "Ishlab chiqarish bosqichlari",
@@ -924,7 +935,7 @@
       "type_EQUITY": "Kapital",
       "type_REVENUE": "Daromadlar",
       "type_EXPENSE": "Xarajatlar",
-      "accountsWithMovement": "harakatli hisoblar — bosing: filtr",
+      "accountsWithMovement": "harakatli hisoblar",
       "rowHint": "Qatorni bosing — shu hisob provodkalari jurnalda ochiladi.",
       "listHint": "Hisobni bosing — uning provodkalari jurnalda ochiladi."
     },
@@ -1010,7 +1021,8 @@
     },
     "security": {
       "changesOnly": "Faqat o‘zgarishlar (kirish-chiqishlarsiz)",
-      "dayLine": "{count, plural, other {# ta harakat}}{deleted, plural, =0 {} other {, shundan # ta o‘chirish}}"
+      "dayLine": "{count, plural, other {# ta harakat}}{deleted, plural, =0 {} other {, shundan # ta o‘chirish}}",
+      "withSignIns": "Kirish-chiqishlar ham"
     },
     "billing": {
       "daysLeft": "Tugashiga {count} kun qoldi",

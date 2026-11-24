@@ -25,8 +25,7 @@ import {
   AlertCircle,
   ArrowDownRight,
   ArrowUpRight,
-  Wallet,
-} from 'lucide-react';
+  Wallet, FileText } from 'lucide-react';
 import type { ServiceActDetail } from '@/lib/service-act';
 import type { CashAccount } from '@shared/types';
 import { unitLabel } from '@/lib/units';
@@ -320,7 +319,7 @@ export function ServiceActDetailsModal({
   const detailsFooter = (
     <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', gap: 'var(--space-3)', width: '100%' }}>
       <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-        <Button variant="ghost" size="sm" onClick={() => void handleDeleteFromModal()} disabled={loading} style={{ color: 'var(--color-error-700)' }}>
+        <Button variant="danger-ghost" size="sm" onClick={() => void handleDeleteFromModal()} disabled={loading}>
           <Trash2 size={14} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}
         </Button>
         {isPosted && paid === 0 && (
@@ -369,7 +368,7 @@ export function ServiceActDetailsModal({
   );
 
   return (
-    <Modal
+    <Modal icon={<FileText size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       title={

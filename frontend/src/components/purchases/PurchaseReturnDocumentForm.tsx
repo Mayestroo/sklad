@@ -899,9 +899,9 @@ export function PurchaseReturnDocumentForm({ initialData, mode }: PurchaseReturn
                       <td style={{ padding: '10px 12px', textAlign: 'center' }}>
                         <Button aria-label={isRu ? 'Удалить' : 'O‘chirish'} title={isRu ? 'Удалить' : 'O‘chirish'}
                           size="sm"
-                          variant="ghost"
+                          variant="danger-ghost"
                           onClick={() => handleRemoveItem(idx)}
-                          style={{ color: 'var(--color-danger-700)', padding: '4px' }}
+                          style={{ padding: '4px' }}
                         >
                           <Trash2 size={16} />
                         </Button>

@@ -4,12 +4,13 @@ import { activateOnKey } from '@/lib/a11y';
 import { useMemo, useState } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchField } from '@/components/ui/SearchField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { totalsByCurrency } from '@/lib/currency-totals';
-import { ChipGroup, ColumnChooser, CurrencyTotals, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { CurrencyTotals } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, SegmentedFilter, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
@@ -47,6 +48,8 @@ interface ExpensesResponse {
   };
 }
 
+const FILTER_DEFAULTS = { status: '', expenseType: '' };
+
 export default function ExpensesPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -57,18 +60,22 @@ export default function ExpensesPage() {
 
   const [activeTab, setActiveTab] = useState<'list' | 'analytics'>('list');
 
-  // Filters
-  const [search, setSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string>('ALL');
-  const [typeFilter, setTypeFilter] = useState<string>('ALL');
-  const [page, setPage] = useState(1);
+  // Filters live in the URL and are remembered per user; a new filter starts again from page 1.
+  const lf = useFilterState('expenses.list', FILTER_DEFAULTS);
+  const search = lf.debouncedSearch;
+  const statusFilter = lf.values.status;
+  const typeFilter = lf.values.expenseType;
+  const filterKey = `${search}|${statusFilter}|${typeFilter}`;
+  const [pageAt, setPageAt] = useState({ key: '', page: 1 });
+  const page = pageAt.key === filterKey ? pageAt.page : 1;
+  const setPage = (next: (p: number) => number) => setPageAt({ key: filterKey, page: next(page) });
 
   // The filters and page are the endpoint (= query key).
   const expensesEndpoint = useMemo(() => {
     const queryParams = new URLSearchParams();
     if (search) queryParams.set('search', search);
-    if (statusFilter !== 'ALL') queryParams.set('status', statusFilter);
-    if (typeFilter !== 'ALL') queryParams.set('expenseType', typeFilter);
+    if (statusFilter) queryParams.set('status', statusFilter);
+    if (typeFilter) queryParams.set('expenseType', typeFilter);
     queryParams.set('page', page.toString());
     queryParams.set('limit', '20');
     return `/purchases/additional-expenses?${queryParams.toString()}`;
@@ -170,11 +177,7 @@ export default function ExpensesPage() {
   const [sort, setSort] = usePersistentState<SortState | null>('expenses.list.sort', null);
   const items = data?.items ?? [];
   const open = (item: AdditionalExpense) => router.push(`/${locale}/purchases/expenses/${item.id}`);
-  const kpi = (list: CurrencyAmountItem[] | undefined) => (list && list.some((x) => x.amount !== 0) ? <MultiCurrencyValue items={list} locale={locale} /> : '—');
-  const toggleType = (t: string) => {
-    setTypeFilter(typeFilter === t ? 'ALL' : t);
-    setPage(1);
-  };
+  const kpi = (list: CurrencyAmountItem[] | undefined) => (list && list.some((x) => x.amount !== 0) ? <MultiCurrencyValue inherit items={list} locale={locale} /> : '—');
   const typeLabel: Record<string, string> = {
     TRANSPORT: isRu ? 'Транспорт' : 'Transport',
     CUSTOMS: isRu ? 'Таможня' : 'Bojxona',
@@ -252,13 +255,21 @@ export default function ExpensesPage() {
     },
   ];
 
-  const anyFilter = Boolean(search || statusFilter !== 'ALL' || typeFilter !== 'ALL');
-  const clearAll = () => {
-    setSearch('');
-    setStatusFilter('ALL');
-    setTypeFilter('ALL');
-    setPage(1);
-  };
+  const filterDefs: FilterDef[] = [
+    {
+      key: 'status',
+      kind: 'segmented',
+      label: tl('status'),
+      options: [
+        { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
+        { value: 'POSTED', label: isRu ? 'Проведен' : 'Tasdiqlangan' },
+        { value: 'CANCELLED', label: isRu ? 'Отменен' : 'Bekor qilingan' },
+      ],
+    },
+    { key: 'expenseType', kind: 'select', label: te('type'), options: Object.entries(typeLabel).map(([value, label]) => ({ value, label })) },
+  ];
+  const anyFilter = Boolean(search || lf.activeCount > 0);
+  const clearAll = lf.reset;
 
   return (
     <div className="rd-page">
@@ -267,71 +278,40 @@ export default function ExpensesPage() {
         subtitle={te('subtitle')}
         actions={
           <Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}>
-            <Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi Xarajat'}
+            <Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi xarajat'}
           </Button>
         }
       />
 
-      {/* Totals by type — each tile filters the list to that type */}
-      <SignalStrip label={tl('summary')}>
-        <Signal tone="warning" label={tIn('transport_xarajatlari')} value={kpi(data?.stats.transport)} hint={te('clickToFilter')} active={typeFilter === 'TRANSPORT'} onClick={() => toggleType('TRANSPORT')} />
-        <Signal tone="info" label={tIn('bojxona_tolovlari')} value={kpi(data?.stats.customs)} hint={te('clickToFilter')} active={typeFilter === 'CUSTOMS'} onClick={() => toggleType('CUSTOMS')} />
-        <Signal tone="neutral" label={tIn('brokerlik_xizmatlari')} value={kpi(data?.stats.broker)} hint={te('clickToFilter')} active={typeFilter === 'BROKER'} onClick={() => toggleType('BROKER')} />
-        <Signal tone="success" label={tIn('jami_taqsimlangan')} value={kpi(data?.stats.all)} hint={te('allHint')} />
-      </SignalStrip>
+      {/* Totals by type */}
+      <StatCardGrid label={tl('summary')} count={4}>
+        <StatCard label={tIn('transport_xarajatlari')} loading={loading} value={kpi(data?.stats.transport)} />
+        <StatCard label={tIn('bojxona_tolovlari')} loading={loading} value={kpi(data?.stats.customs)} />
+        <StatCard label={tIn('brokerlik_xizmatlari')} loading={loading} value={kpi(data?.stats.broker)} />
+        <StatCard label={tIn('jami_taqsimlangan')} loading={loading} value={kpi(data?.stats.all)} secondary={te('allHint')} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField
-            value={search}
-            onChange={(v) => {
-              setSearch(v);
-              setPage(1);
-            }}
-            placeholder={isRu ? 'Поиск по номеру, поставщику, комментарию...' : 'Raqam, kontragent, izoh bo‘yicha qidiruv...'}
-            label={tl('search')}
-          />
-          <ChipGroup
-            label={te('view')}
-            options={[
-              { value: 'list', label: tIn('barcha_xarajatlar') },
-              { value: 'analytics', label: tIn('tannarxga_tasiri') },
-            ]}
-            value={activeTab}
-            onChange={(v) => setActiveTab((v || 'list') as 'list' | 'analytics')}
-          />
-          {activeTab === 'list' && <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
-        </div>
-        {activeTab === 'list' && (
-          <div className="rd-toolbar-row">
-            <ChipGroup
-              label={tl('status')}
-              showLabel
-              options={[
-                { value: '', label: tl('all') },
-                { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
-                { value: 'POSTED', label: isRu ? 'Проведен' : 'Tasdiqlangan' },
-                { value: 'CANCELLED', label: isRu ? 'Отменен' : 'Bekor qilingan' },
-              ]}
-              value={statusFilter === 'ALL' ? '' : statusFilter}
-              onChange={(v) => {
-                setStatusFilter(v || 'ALL');
-                setPage(1);
-              }}
-            />
-            <ChipGroup
-              label={te('type')}
-              showLabel
-              options={[{ value: '', label: tl('all') }, ...Object.entries(typeLabel).map(([value, label]) => ({ value, label }))]}
-              value={typeFilter === 'ALL' ? '' : typeFilter}
-              onChange={(v) => {
-                setTypeFilter(v || 'ALL');
-                setPage(1);
-              }}
-            />
-          </div>
-        )}
+      {/* View switch (not a filter) */}
+      <div className="rd-toolbar-row">
+        <SegmentedFilter
+          name="view"
+          label={te('view')}
+          options={[
+            { value: 'list', label: tIn('barcha_xarajatlar') },
+            { value: 'analytics', label: tIn('tannarxga_tasiri') },
+          ]}
+          value={activeTab}
+          onChange={(v) => setActiveTab((v || 'list') as 'list' | 'analytics')}
+        />
       </div>
+
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={isRu ? 'Номер, поставщик, комментарий' : 'Raqam, kontragent yoki izoh'}
+        resultCount={loading ? null : (data?.total ?? items.length)}
+        columns={activeTab === 'list' ? <ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} /> : undefined}
+      />
 
       {activeTab === 'list' && (
         <div className="rd-table-card">
@@ -351,7 +331,7 @@ export default function ExpensesPage() {
                 anyFilter ? (
                   <EmptyState icon={Receipt} title={tl('nothingFound')} description={tl('nothingFoundHint')} action={<Button variant="secondary" onClick={clearAll}>{tl('clearFilters')}</Button>} />
                 ) : (
-                  <EmptyState icon={Receipt} title={te('none')} description={te('noneHint')} action={<Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}><Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi Xarajat'}</Button>} />
+                  <EmptyState icon={Receipt} title={te('none')} description={te('noneHint')} action={<Button onClick={() => router.push(`/${locale}/purchases/expenses/new`)}><Plus size={16} aria-hidden /> {isRu ? 'Новый расход' : 'Yangi xarajat'}</Button>} />
                 )
               }
             />

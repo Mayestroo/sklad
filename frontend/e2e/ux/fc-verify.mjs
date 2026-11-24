@@ -82,7 +82,7 @@ for (const locale of locales) {
     }
 
     // Segmented
-    const seg = page.locator('.fb-seg').first();
+    const seg = page.locator('.fb .fb-seg').first(); // the filter bar's, not a view switch
     if (await seg.count()) {
       await seg.locator('.fb-seg-item').nth(1).click();
       await settle(page);

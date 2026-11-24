@@ -16,7 +16,7 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton, SkeletonRows } from '@/components/ui/Skeleton';
 import { toast } from '@/context/ToastContext';
-import { CheckCircle, ExternalLink, Receipt, Sparkles } from 'lucide-react';
+import { CheckCircle, ExternalLink, Receipt, Sparkles, CreditCard } from 'lucide-react';
 import { PricingPlan, SubscriptionPayment } from '@shared/types';
 import { COMPANY_STATUS_LABELS } from '@/lib/platform-labels';
 
@@ -239,7 +239,7 @@ export default function BillingSettingsPage() {
         </>
       )}
 
-      <Modal
+      <Modal icon={<CreditCard size={20} />}
         isOpen={checkoutModalOpen}
         onClose={() => setCheckoutModalOpen(false)}
         title={isRu ? 'Оплата подписки' : 'Obuna uchun to‘lov'}
@@ -247,10 +247,10 @@ export default function BillingSettingsPage() {
         onSubmitShortcut={checkoutResult ? undefined : () => void handleExecuteCheckout()}
         footer={
           checkoutResult ? (
-            <Button variant="outline" onClick={() => setCheckoutModalOpen(false)}>{isRu ? 'Закрыть' : 'Yopish'}</Button>
+            <Button data-dialog-cancel variant="outline" onClick={() => setCheckoutModalOpen(false)}>{isRu ? 'Закрыть' : 'Yopish'}</Button>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setCheckoutModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+              <Button data-dialog-cancel variant="outline" onClick={() => setCheckoutModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
               <Button variant="primary" onClick={() => void handleExecuteCheckout()} loading={checkoutLoading} loadingText={isRu ? 'Формируется…' : 'Tayyorlanmoqda…'}>
                 {isRu ? 'Сформировать счёт' : 'To‘lov hisobini tayyorlash'}
               </Button>

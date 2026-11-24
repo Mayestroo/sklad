@@ -190,7 +190,7 @@ export function PartialDispatchModal({
   };
 
   return (
-    <Modal
+    <Modal icon={<Truck size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       title={
@@ -198,8 +198,20 @@ export function PartialDispatchModal({
           ? `Отгрузка со склада — Заказ ${order.orderNumber}`
           : `Ombordan chiqim qilish — Buyurtma ${order.orderNumber}`
       }
+      footer={
+        <>
+          <Button data-dialog-cancel variant="secondary" onClick={onClose} disabled={submitting}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button variant="primary" type="submit" form="partial-dispatch-modal-form" disabled={submitting || totalDispatchCount <= 0}>
+            <Truck size={16} style={{ marginRight: '6px' }} />
+            {isRu ? `Отгрузить (${totalDispatchCount} шт)` : `Chiqim qilish (${totalDispatchCount} dona)`}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('partial-dispatch-modal-form') as HTMLFormElement | null)?.requestSubmit()}
     >
-      <form
+      <form id="partial-dispatch-modal-form"
         onSubmit={handleSubmit}
         style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}
       >
@@ -345,15 +357,6 @@ export function PartialDispatchModal({
         </div>
 
         {/* Action Buttons */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-          <Button variant="secondary" onClick={onClose} disabled={submitting}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button variant="primary" type="submit" disabled={submitting || totalDispatchCount <= 0}>
-            <Truck size={16} style={{ marginRight: '6px' }} />
-            {isRu ? `Отгрузить (${totalDispatchCount} шт)` : `Chiqim qilish (${totalDispatchCount} dona)`}
-          </Button>
-        </div>
       </form>
     </Modal>
   );

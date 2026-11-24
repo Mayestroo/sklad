@@ -86,18 +86,20 @@ allows 5 logins per minute.
 ## Page patterns (2026-11 redesign, branch ux/redesign)
 
 Every page answers "what does the person come here to do?" first. The shared kit
-lives in `src/components/ui/list/`, `src/components/ui/DocChecklist.tsx` and the
+lives in `src/components/ui/filters/` (FilterBar), `src/components/ui/stats/` (StatCard),
+`src/components/ui/list/` (DataTable), `src/components/ui/DocChecklist.tsx` and the
 `rd-*` / `doc-*` classes at the end of `globals.css`. New strings: `rd.*` messages.
 
 ### Lists (sales, purchases, orders, returns, expenses, stock, products, counterparties…)
 
 | Piece | Rule |
 |---|---|
-| `SignalStrip` + `Signal` | 2–4 tiles that each **filter the list** ("Overdue 3", "Draft 2"). A tile that cannot be clicked into a list does not belong here. Tone only when there is something to do |
-| `ChipGroup` | Status / type filters with counts, instead of a select. "All" first |
-| `PeriodFilter` + `resolvePeriod` | Today / week / month / custom; `ALL_TIME` for history |
-| `MoreFiltersButton` + `ActiveFilters` | Rare filters fold away; what is active is always visible as removable chips |
-| `useListFilters(key, defaults, urlKeys)` | Filters remembered per browser; URL params (`?status=`, `?q=`) override, so dashboards and other pages can link into a filtered list |
+| `StatCardGrid` + `StatCard` | 2–4 key numbers above the list: label · value · optional secondary line · optional trend. **Not** buttons, links or filters — the same view is reached through the FilterBar. One neutral frame (no stripes, no tinted backgrounds); colour only for a negative value (`negative`) or a trend text. 4 columns, 2 below 1200 px |
+| `FilterBar` + `useFilterState(pageKey, DEFAULTS)` | The one toolbar of every list, in this order: search (`/` focuses it) · the main status as `segmented` · other filters as `select` dropdowns (`searchable` for long lists) · `toggle`s · `period` (always last) · `columns` (ColumnChooser). Under it: removable chips, "Tozalash", the result count. One row when everything fits; otherwise search + Columns on the first line and all filters together on the second (measured, not by breakpoint). Phones: "Filtrlar (n)" opens a bottom sheet |
+| Filter state | `DEFAULTS` is a module constant. Values live in the URL (`?status=DRAFT&q=…`, so links and Back work) and are remembered per user and page. The page maps values to its **existing** API parameters; `periodRange(value)` gives `{from, to}` in local dates. Two bars on one page (production) use different keys and `{ searchKey: 'rq' }` |
+| Paged lists | Derive the page from a key of the filters (`pageAt = { key, page }`) instead of calling `setPage(1)` in every handler |
+| View switches | A choice of *which list or view* (List / Analytics, Provided / Received, Operations: Income / Expenses…) is a `SegmentedFilter` above the FilterBar, not a filter inside it. Report periods that are named API ranges (analytics) are a `SegmentedFilter` too |
+| Task tiles | Tiles that **start** something ("Kirim qilish") are buttons with `.task-tile`, not stat cards |
 | `DataTable` | Sticky sortable header, `onRowClick` + Enter, `footer` totals row, phone card rows. Columns: `primary` (first, bold), `numeric`, `locked` (cannot be hidden via `ColumnChooser`) |
 | `CurrencyTotals` / `totalsByCurrency` | Footer and tile sums per currency (ADR 0023) |
 | Row actions | One `ActionsMenu` (⋯) per row; destructive items `danger: true`, hidden (not disabled) without permission |
@@ -131,7 +133,7 @@ lives in `src/components/ui/list/`, `src/components/ui/DocChecklist.tsx` and the
 - Section titles are questions ("What sells best?"), each with a link to the page where
   you act.
 - Logs (audit, journal): grouped by **local** day with a one-line summary; noisy rows
-  (sign-ins) hidden by default behind a remembered toggle.
+  (sign-ins) hidden by default; a FilterBar toggle ("with sign-ins") shows them.
 
 ### Inboxes and composers (platform admin)
 
@@ -139,6 +141,46 @@ lives in `src/components/ui/list/`, `src/components/ui/DocChecklist.tsx` and the
   with Ctrl+Enter; say what the action does ("the ticket becomes Resolved").
 - Announcements and other publish-to-everyone actions: a live preview per interface
   language, and an explicit warning when one language is missing.
+
+### Dialogs and drawers
+
+- `Modal` (centre) and `Drawer` (side) share `useDialog`: focus moves in and stays inside (Tab wraps), returns
+  to the opener, Esc closes, Ctrl+Enter submits, the page behind does not scroll, only the top surface reacts to keys.
+- **Typed input is never lost by accident.** Backdrop / Esc / ✕ after an edit show "Saqlamasdan yopilsinmi?" inside the
+  same surface (Davom etish / Yopish) — never a second dialog on top. Search boxes and comboboxes are not edits; picks in
+  Select / DatePicker / radios / checkboxes are. `confirmDiscard={false}` for read-only or filter-only surfaces;
+  `data-dialog-ignore` on a field that is not data.
+- A press inside released on the backdrop (selecting text) does not close.
+- Actions always go in `footer` (pinned, visible however long the content). Forms: `<form id="…">` in the body, the
+  submit button `type="submit" form="<id>"` in the footer, `onSubmitShortcut` → `requestSubmit()`.
+- Order in the footer: Cancel (secondary) first, the action last (primary, or danger when it destroys).
+- Mark the footer Cancel / Back button `data-dialog-cancel`: it then closes like Esc and asks first after an edit.
+  Never mark a button that does something (Storno, delete, "cancel document"). Never add an own
+  "close without saving?" `confirm()` on top — the dialog already asks.
+- Small forms (≤ 4 fields) are a `Modal`, not a `Drawer`. Units go inside the field (suffix), not next to it.
+- Confirmations: `useConfirm` (ADR 0021). A destructive confirmation focuses Cancel first.
+- Title says the task ("Yangi mijoz", "To'lov qabul qilish — INV-…") in sentence case (not "Yangi Tovar Qo'shish"),
+  without "(Kirim)"-style tags; `description` for one line on what changes.
+- Look (shared `DialogParts`, classes `dlg-*` in globals.css): header = `icon` in a tinted tile + title + description
+  + ✕; body scrolls; footer is tinted, pinned, actions right. `tone="error"` on the icon for delete dialogs,
+  `warning` for reversals (storno, reopen); other dialogs keep the primary tint.
+- Do not write shortcuts in button labels ("Saqlash (Ctrl+Enter)"): with `onSubmitShortcut` the footer shows
+  `Ctrl + Enter — saqlash` itself (desktop only).
+- Focus on open: a field with `autoFocus`, else the first control of the body. Long forms: group fields under
+  `<h3 className="dlg-section">`; lists inside a dialog show an empty-state line, the free-text note goes last.
+
+### Buttons
+
+| Variant | When |
+|---|---|
+| `primary` | The one main action of a surface (Saqlash, Tasdiqlash, To'lov qabul qilish) |
+| `secondary` / `outline` | Any other action (same neutral look) |
+| `ghost` | Quiet actions in toolbars and rows |
+| `danger` | Confirms something destructive (O'chirish in a confirmation) |
+| `danger-outline` / `danger-ghost` | A destructive action that is not the confirming one (Storno, Qayta ochish, remove line) |
+
+No inline colours on buttons: no green "income" or red "expense" buttons — status colours are for status (badges,
+amounts). The accent colour on a non-button control only marks a selection (tab, chosen option, selected day).
 
 ### Number input
 
@@ -174,8 +216,11 @@ npx vitest run <page folder>          # DOM tests
 npm test                              # node runner: source scans (money, i18n, wiring) — run it too
 bash ../.local/uxrun/lintbase.sh <file>   # no new ESLint errors vs HEAD
 MSYS_NO_PATHCONV=1 node e2e/ux/shot-one.mjs <outDir> <name> <route> 1 1440,390 uz,ru   # overflow 0
+MSYS_NO_PATHCONV=1 node e2e/ux/fc-verify.mjs <route> <outDir>   # FilterBar: search, /, segments, dropdown keys, period, URL, Back, remembered view, phone sheet
+MSYS_NO_PATHCONV=1 node e2e/ux/fb-shot.mjs <route> <out.jpg> [width] [locale]   # how many lines the bar takes
 node e2e/ux/axe-sweep.mjs out.json both    # WCAG 2.1 A/AA, light + dark
 ```
 Task flows used for verification: `e2e/ux/rd-*.mjs` (sale form, transfer, prices,
 inventory document, product, returns, ticket reply, announcement, branch attach,
-finance operations, money input). They write only to the local database.
+finance operations, money input). They write only to the local database. Platform-owner pages: `UX_EMAIL=superadmin@local.test UX_PASSWORD=…`
+(the local account; see the create-superadmin script for its default).

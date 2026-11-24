@@ -17,7 +17,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { usePersistentState } from '@/lib/usePersistentState';
-import { ChipGroup } from '@/components/ui/list/ListKit';
+import { FilterBar, SegmentedFilter, useFilterState } from '@/components/ui/filters';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import {
   FileText,
@@ -25,12 +25,13 @@ import {
   PackageMinus,
   ClipboardCheck,
   Plus,
-  Printer,
-} from 'lucide-react';
+  Printer, ClipboardList } from 'lucide-react';
 import { InventoryDocument, Product, Warehouse } from '@shared/types';
 
 /** Inventory documents have no currency: their prices are FIFO batch cost, kept in UZS. */
 const INVENTORY_COST_CURRENCY = 'UZS';
+
+const FILTER_DEFAULTS = { type: '' };
 
 export default function InventoryDocumentsPage() {
   const tCommon = useTranslations('common');
@@ -168,7 +169,9 @@ export default function InventoryDocumentsPage() {
   }));
 
   const tl = useTranslations('rd.list');
-  const [typeFilter, setTypeFilter] = useState('');
+  // The type filter lives in the URL and is remembered per user.
+  const lf = useFilterState('invdocs.list', FILTER_DEFAULTS);
+  const typeFilter = lf.values.type;
   const [sort, setSort] = usePersistentState<SortState | null>('invdocs.sort', null);
   const startDocument = (type: 'INBOUND' | 'OUTBOUND' | 'STOCKTAKING') => {
     setDocType(type);
@@ -178,9 +181,9 @@ export default function InventoryDocumentsPage() {
   const shownDocs = typeFilter ? documents.filter((d) => d.docType === typeFilter) : documents;
   const countOf = (type: string) => documents.filter((d) => d.docType === type).length;
   const tasks = [
-    { type: 'INBOUND' as const, Icon: PackagePlus, tone: 'success', title: tdoc('inTitle'), hint: tdoc('inHint') },
-    { type: 'OUTBOUND' as const, Icon: PackageMinus, tone: 'error', title: tdoc('outTitle'), hint: tdoc('outHint') },
-    { type: 'STOCKTAKING' as const, Icon: ClipboardCheck, tone: 'warning', title: tdoc('countTitle'), hint: tdoc('countHint') },
+    { type: 'INBOUND' as const, Icon: PackagePlus, title: tdoc('inTitle'), hint: tdoc('inHint') },
+    { type: 'OUTBOUND' as const, Icon: PackageMinus, title: tdoc('outTitle'), hint: tdoc('outHint') },
+    { type: 'STOCKTAKING' as const, Icon: ClipboardCheck, title: tdoc('countTitle'), hint: tdoc('countHint') },
   ];
 
   const columns: Column<InventoryDocument>[] = [
@@ -231,35 +234,35 @@ export default function InventoryDocumentsPage() {
       {/* Start from the task, not from a "document type" field */}
       <section aria-labelledby="invdocs-start">
         <h2 id="invdocs-start" className="dash-section-title">{tdoc('startTitle')}</h2>
-        <div className="rd-signals">
-          {tasks.map(({ type, Icon, tone, title, hint }) => (
-            <button key={type} type="button" className={`rd-signal rd-tone-${tone}`} onClick={() => startDocument(type)}>
-              <span className="rd-signal-label" style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+        <div className="task-tiles">
+          {tasks.map(({ type, Icon, title, hint }) => (
+            <button key={type} type="button" className="task-tile" onClick={() => startDocument(type)}>
+              <span className="task-tile-title">
                 <Icon size={16} aria-hidden /> {title}
               </span>
-              <span className="rd-signal-hint" style={{ color: 'var(--color-text-secondary)' }}>{hint}</span>
-              <span className="rd-signal-hint">{tdoc('docsSoFar', { count: countOf(type) })}</span>
+              <span className="task-tile-hint">{hint}</span>
+              <span className="task-tile-meta">{tdoc('docsSoFar', { count: countOf(type) })}</span>
             </button>
           ))}
         </div>
       </section>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <ChipGroup
-            label={isRu ? 'Тип' : 'Turi'}
-            showLabel
-            options={[
-              { value: '', label: tl('all') },
+      <FilterBar
+        state={lf}
+        defs={[
+          {
+            key: 'type',
+            kind: 'segmented',
+            label: isRu ? 'Тип' : 'Turi',
+            options: [
               { value: 'INBOUND', label: tdoc('inTitle'), count: countOf('INBOUND') },
               { value: 'OUTBOUND', label: tdoc('outTitle'), count: countOf('OUTBOUND') },
               { value: 'STOCKTAKING', label: tdoc('countTitle'), count: countOf('STOCKTAKING') },
-            ]}
-            value={typeFilter}
-            onChange={setTypeFilter}
-          />
-        </div>
-      </div>
+            ],
+          },
+        ]}
+        resultCount={shownDocs.length}
+      />
 
       <div className="rd-table-card">
         {failedQuery ? (
@@ -290,7 +293,19 @@ export default function InventoryDocumentsPage() {
 
       {/* New Document dialog */}
       {showModal && (
-        <Modal isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg">
+        <Modal icon={<ClipboardList size={20} />} description={isRu ? 'После оформления документ проводится и остаток склада меняется' : 'Rasmiylashtirilgach hujjat o‘tkaziladi va ombor qoldig‘i o‘zgaradi'} isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg"
+          footer={
+            <>
+              <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setShowModal(false)}>
+                {tCommon('cancel')}
+              </Button>
+              <Button type="submit" form="invdoc-form" variant="primary" disabled={createLoading || items.length === 0}>
+                {createLoading ? tCommon('loading') : (isRu ? 'Провести документ' : 'Rasmiylashtirish va o‘tkazish')}
+              </Button>
+            </>
+          }
+          onSubmitShortcut={() => (document.getElementById('invdoc-form') as HTMLFormElement | null)?.requestSubmit()}
+        >
           <div>
             {createError && (
               <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
@@ -298,15 +313,15 @@ export default function InventoryDocumentsPage() {
               </div>
             )}
 
-            <form onSubmit={handleCreateDocument} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <form id="invdoc-form" onSubmit={handleCreateDocument} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-3)' }}>
                 <div>
                   <span className="rd-field-label">{tIn('hujjat_turi')}</span>
-                  <ChipGroup
+                  <SegmentedFilter
                     label={tIn('hujjat_turi')}
                     options={tasks.map((t) => ({ value: t.type, label: t.title }))}
                     value={docType}
-                    onChange={(v) => v && setDocType(v as typeof docType)}
+                    onChange={(v: string) => v && setDocType(v as typeof docType)}
                   />
                 </div>
 
@@ -353,7 +368,7 @@ export default function InventoryDocumentsPage() {
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена за ед.' : 'Birlik Narxi'}</label>
+                    <label style={{ display: 'block', fontSize: '11px', color: 'var(--color-text-secondary)' }}>{isRu ? 'Цена за ед.' : 'Birlik narxi'}</label>
                     <MoneyInput
                       aria-label={isRu ? 'Цена за ед.' : 'Birlik narxi'}
                       value={unitPrice || ''}
@@ -408,15 +423,6 @@ export default function InventoryDocumentsPage() {
                   style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
                 />
               </div>
-
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-                <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
-                  {tCommon('cancel')}
-                </Button>
-                <Button type="submit" variant="primary" disabled={createLoading || items.length === 0}>
-                  {createLoading ? tCommon('loading') : (isRu ? 'Провести документ' : 'Rasmiylashtirish va o‘tkazish')}
-                </Button>
-              </div>
             </form>
           </div>
         </Modal>
@@ -460,7 +466,7 @@ export default function InventoryDocumentsPage() {
                   <th style={{ padding: '8px', textAlign: 'left' }}>{isRu ? 'Товар' : 'Mahsulot'}</th>
                   <th style={{ padding: '8px', textAlign: 'left' }}>SKU</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Кол-во' : 'Miqdori'}</th>
-                  <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Цена за ед.' : 'Birlik Narxi'}</th>
+                  <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Цена за ед.' : 'Birlik narxi'}</th>
                   <th style={{ padding: '8px', textAlign: 'right' }}>{isRu ? 'Итого' : 'Jami'}</th>
                 </tr>
               </thead>

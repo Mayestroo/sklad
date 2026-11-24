@@ -16,7 +16,7 @@ import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Plus, Building2, ArrowRight } from 'lucide-react';
+import { Plus, Building2, ArrowRight, Handshake } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { toast } from '@/context/ToastContext';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -257,9 +257,9 @@ export default function CrmKanbanPage() {
                           </button>
                         )}
                         {deal.stage === 'NEGOTIATION' && (
-                          <button type="button" className="rd-next-btn" style={{ background: 'var(--color-error-50)', color: 'var(--color-error-700)', borderColor: 'var(--color-error-200)' }} disabled={movingId === deal.id} onClick={() => void handleMoveStage(deal, 'LOST')}>
+                          <Button size="sm" variant="danger-outline" disabled={movingId === deal.id} onClick={() => void handleMoveStage(deal, 'LOST')}>
                             {stageName('LOST')}
-                          </button>
+                          </Button>
                         )}
                         <span style={{ marginLeft: 'auto' }}>
                           <ActionsMenu
@@ -281,14 +281,14 @@ export default function CrmKanbanPage() {
         </div>
       )}
 
-      <Modal
+      <Modal icon={<Handshake size={20} />}
         isOpen={formOpen}
         onClose={() => setFormOpen(false)}
         title={editingId ? (isRu ? 'Изменить сделку' : 'Bitimni tahrirlash') : isRu ? 'Новая сделка' : 'Yangi bitim'}
         onSubmitShortcut={() => void handleSave()}
         footer={
           <>
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button data-dialog-cancel type="button" variant="outline" onClick={() => setFormOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
             <Button type="submit" form="crm-deal-form" variant="primary" loading={saving} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
               {editingId ? (isRu ? 'Сохранить' : 'Saqlash') : isRu ? 'Создать сделку' : 'Bitim yaratish'}
             </Button>

@@ -18,7 +18,7 @@ import {
   isCashAccountCompatibleWithSalesPayment,
   isCashAccountCurrencyValid,
 } from '@shared/types/cash-account-policy';
-import { CreditCard, AlertCircle } from 'lucide-react';
+import { CreditCard, AlertCircle, Wallet } from 'lucide-react';
 
 type CashAccountListResponse = CashAccount[] | { data?: CashAccount[] };
 
@@ -165,12 +165,24 @@ export function PaySalesInvoiceModal({
   };
 
   return (
-    <Modal
+    <Modal icon={<Wallet size={20} />}
       isOpen={isOpen}
       onClose={handleClose}
       title={isRu ? `Принять оплату — ${invoice.invoiceNumber}` : `To‘lov qabul qilish — ${invoice.invoiceNumber}`}
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={handleClose} disabled={loading}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="pay-sales-invoice-modal-form" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <CreditCard size={16} />
+            {loading ? (isRu ? 'Проведение...' : 'Bajarilmoqda...') : (isRu ? 'Принять оплату' : 'To‘lovni qabul qilish')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('pay-sales-invoice-modal-form') as HTMLFormElement | null)?.requestSubmit()}
     >
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <form id="pay-sales-invoice-modal-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         {error && (
           <div
             style={{
@@ -315,18 +327,8 @@ export function PaySalesInvoiceModal({
         </div>
 
         {/* Required fields indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 600, paddingTop: '4px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', paddingTop: '4px' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)', borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
-            <Button type="button" variant="secondary" onClick={handleClose} disabled={loading}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button type="submit" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <CreditCard size={16} />
-            {loading ? (isRu ? 'Проведение...' : 'Bajarilmoqda...') : (isRu ? 'Принять оплату' : 'To‘lovni qabul qilish')}
-          </Button>
         </div>
       </form>
     </Modal>

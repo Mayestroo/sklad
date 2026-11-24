@@ -16,7 +16,7 @@ import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import { CURRENCY_OPTIONS, errorMessage, formatCurrency } from '@/lib/utils';
 import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
-import { ArrowLeft, Save, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Save, AlertCircle, Tag } from 'lucide-react';
 import { Category } from '@shared/types';
 
 export default function NewProductPage() {
@@ -404,16 +404,20 @@ export default function NewProductPage() {
           </Card>
         </aside>
       </form>
-      <Modal isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={isRu ? 'Новая категория' : 'Yangi kategoriya'} size="sm">
-        <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      <Modal icon={<Tag size={20} />} isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={isRu ? 'Новая категория' : 'Yangi kategoriya'} size="sm"
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setShowCategoryModal(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+          <Button type="submit" form="page-form" disabled={categoryLoading}>{isRu ? 'Создать' : 'Yaratish'}</Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+        <form id="page-form" onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <Input label={isRu ? 'Название на узбекском *' : 'O‘zbekcha nomi *'} value={categoryNameUz} onChange={(event) => setCategoryNameUz(event.target.value)} required autoFocus />
           <Input label={isRu ? 'Название на русском' : 'Ruscha nomi'} value={categoryNameRu} onChange={(event) => setCategoryNameRu(event.target.value)} />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-            <Button type="button" variant="secondary" onClick={() => setShowCategoryModal(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
-            <Button type="submit" disabled={categoryLoading}>{isRu ? 'Создать' : 'Yaratish'}</Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
     </div>
   );
 }

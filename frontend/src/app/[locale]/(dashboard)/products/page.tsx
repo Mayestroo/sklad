@@ -4,10 +4,10 @@ import { useState, useMemo } from 'react';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { useLocale, useTranslations } from 'next-intl';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchField } from '@/components/ui/SearchField';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
-import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -16,8 +16,8 @@ import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatPercent, formatPriceOrUnset, errorMessage } from '@/lib/utils';
 import { catalogMarkupPercent } from '@/lib/inventory-cost';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Select';
 import { Modal } from '@/components/ui/Modal';
 import {
   Package,
@@ -26,8 +26,7 @@ import {
   Tag,
   Edit2,
   Trash2,
-  Zap,
-} from 'lucide-react';
+  Zap, Tags, Pencil } from 'lucide-react';
 import { Product, Category } from '@shared/types';
 import { CreateProductDrawer } from '@/components/products/CreateProductDrawer';
 import { toast } from '@/context/ToastContext';
@@ -40,6 +39,8 @@ function productName(p: Product, locale: 'uz' | 'ru'): string {
   if (typeof p.name === 'string') return p.name;
   return p.name[locale] || p.name.ru || p.name.uz || '—';
 }
+
+const FILTER_DEFAULTS = { type: '', categoryId: '', status: '', stock: '' };
 
 export default function ProductsPage() {
   const locale = useLocale() as 'uz' | 'ru';
@@ -70,12 +71,12 @@ export default function ProductsPage() {
   const [deletingCategory, setDeletingCategory] = useState<Category | null>(null);
   const [deleteCatLoading, setDeleteCatLoading] = useState(false);
 
-  // Filters
-  // Dropdown filters are remembered per browser; the search box starts empty.
-  const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = usePersistentState<string>('products.category', '');
-  const [selectedType, setSelectedType] = usePersistentState<string>('products.type', '');
-  const [selectedStatus, setSelectedStatus] = usePersistentState<string>('products.status', '');
+  // Filters live in the URL and are remembered per user; the list is filtered here. A link may open
+  // the list pre-filtered (?stock=low from the dashboard).
+  const lf = useFilterState('products.list', FILTER_DEFAULTS);
+  const search = lf.search;
+  const { categoryId: selectedCategory, type: selectedType, status: selectedStatus } = lf.values;
+  const focus = lf.values.stock;
 
   // Selected product modal
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
@@ -222,27 +223,8 @@ export default function ProductsPage() {
   const servicesCount = products.filter((p) => p.type === 'SERVICE').length;
   const totalCategories = categories.length;
 
-  const categoryOptions = [
-    { value: '', label: isRu ? 'Все категории' : 'Hamma kategoriyalar' },
-    ...categories.map((c) => ({
-      value: c.id,
-      label: typeof c.name === 'object' ? c.name[locale] || c.name.ru || c.name.uz || '' : c.name,
-    })),
-  ];
-
-  // TZ "Ishlab chiqarish" 3.1: Tovar | Xomashyo | Tayyor mahsulot | Xizmat.
-  const typeOptions = productTypeOptions(locale, isRu ? 'Все типы' : 'Barcha turlar');
-
-  const statusOptions = [
-    { value: '', label: isRu ? 'Все статусы' : 'Barcha holatlar' },
-    { value: 'ACTIVE', label: isRu ? 'Активный' : 'Faol' },
-    { value: 'INACTIVE', label: isRu ? 'Неактивный' : 'Nofaol' },
-  ];
-
   const tl = useTranslations('rd.list');
   const tp = useTranslations('rd.products');
-  // Quick focus: low stock / no sale price, from the tiles or a link (?stock=low).
-  const [focus, setFocus] = useState<'' | 'low' | 'noprice'>(() => (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('stock') === 'low' ? 'low' : ''));
   const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('products.hidden', ['unit']);
   const [sort, setSort] = usePersistentState<SortState | null>('products.sort', null);
   const [limit, setLimit] = useState(100);
@@ -348,14 +330,20 @@ export default function ProductsPage() {
     },
   ];
 
-  const anyFilter = Boolean(search || selectedCategory || selectedType || selectedStatus || focus);
-  const clearAll = () => {
-    setSearch('');
-    setSelectedCategory('');
-    setSelectedType('');
-    setSelectedStatus('');
-    setFocus('');
-  };
+  const filterDefs: FilterDef[] = [
+    { key: 'type', kind: 'segmented', label: tIn('turi'), options: productTypeOptions(locale) },
+    {
+      key: 'categoryId',
+      kind: 'select',
+      label: isRu ? 'Категория' : 'Kategoriya',
+      searchable: true,
+      options: categories.map((c) => ({ value: c.id, label: typeof c.name === 'object' ? c.name[locale] || c.name.ru || c.name.uz || '' : c.name })),
+    },
+    { key: 'status', kind: 'select', label: isRu ? 'Статус' : 'Holat', options: [{ value: 'ACTIVE', label: isRu ? 'Активный' : 'Faol' }, { value: 'INACTIVE', label: isRu ? 'Неактивный' : 'Nofaol' }] },
+    { key: 'stock', kind: 'select', label: tp('attention'), options: [{ value: 'low', label: tp('sigLow'), count: lowCount }, { value: 'noprice', label: tp('sigNoPrice'), count: noPriceCount }] },
+  ];
+  const anyFilter = Boolean(search.trim() || lf.activeCount > 0);
+  const clearAll = lf.reset;
 
   return (
     <div className="rd-page animate-fade-in">
@@ -380,26 +368,20 @@ export default function ProductsPage() {
         }
       />
 
-      <SignalStrip label={tl('summary')}>
-        <Signal tone="error" label={tp('sigLow')} value={lowCount} hint={tp('sigLowHint')} active={focus === 'low'} onClick={() => setFocus(focus === 'low' ? '' : 'low')} />
-        <Signal tone="warning" label={tp('sigNoPrice')} value={noPriceCount} hint={tp('sigNoPriceHint')} active={focus === 'noprice'} onClick={() => setFocus(focus === 'noprice' ? '' : 'noprice')} />
-        <Signal tone="info" label={tIn('faol_pozitsiyalar')} value={`${activeProducts} / ${totalProducts}`} hint={tIn('xizmatlar_p0', { p0: servicesCount })} />
-        <Signal tone="neutral" label={isRu ? 'Категории' : 'Kategoriyalar'} value={totalCategories} />
-      </SignalStrip>
+      <StatCardGrid label={tl('summary')} count={4}>
+        <StatCard label={tp('sigLow')} loading={productsQuery.isPending} value={lowCount} secondary={tp('sigLowHint')} />
+        <StatCard label={tp('sigNoPrice')} loading={productsQuery.isPending} value={noPriceCount} secondary={tp('sigNoPriceHint')} />
+        <StatCard label={tIn('faol_pozitsiyalar')} loading={productsQuery.isPending} value={`${activeProducts} / ${totalProducts}`} secondary={tIn('xizmatlar_p0', { p0: servicesCount })} />
+        <StatCard label={isRu ? 'Категории' : 'Kategoriyalar'} value={totalCategories} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={tp('searchPh')} label={tl('search')} autoFocus />
-          <div style={{ minWidth: 200 }}>
-            <Select options={categoryOptions} value={selectedCategory} onChange={setSelectedCategory} searchable />
-          </div>
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup label={tIn('turi')} showLabel options={typeOptions} value={selectedType} onChange={setSelectedType} />
-          <ChipGroup label={isRu ? 'Статус' : 'Holat'} showLabel options={statusOptions} value={selectedStatus} onChange={setSelectedStatus} />
-        </div>
-      </div>
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={tp('searchPh')}
+        resultCount={productsQuery.isPending ? null : focused.length}
+        columns={<ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {productsQuery.isError ? (
@@ -437,11 +419,18 @@ export default function ProductsPage() {
 
       {/* Product Detail View Modal */}
       {selectedProduct && (
-        <Modal
+        <Modal icon={<Package size={20} />}
           isOpen={true}
           onClose={() => setSelectedProduct(null)}
           title={`${isRu ? 'Информация о товаре' : 'Tovar ma\'lumotlari'}: ${getProductName(selectedProduct)}`}
           size="md"
+          footer={
+            <>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setSelectedProduct(null)}>
+                {isRu ? 'Закрыть' : 'Yopish'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
@@ -494,23 +483,31 @@ export default function ProductsPage() {
                 </div>
               </div>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 'var(--space-4)' }}>
-              <Button variant="secondary" onClick={() => setSelectedProduct(null)}>
-                {isRu ? 'Закрыть' : 'Yopish'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
 
       {/* Delete Product Confirmation Modal */}
       {deletingProduct && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           onClose={() => setDeletingProduct(null)}
-          title={isRu ? 'Удалить товар?' : 'Tovarni o‘chirishni tasdiqlaysizmi?'}
+          title={isRu ? 'Удалить товар?' : 'Tovar o‘chirilsinmi?'}
           size="sm"
+          footer={
+            <>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeletingProduct(null)} disabled={deleteLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteProduct}
+                disabled={deleteLoading}
+              >
+                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
@@ -518,19 +515,6 @@ export default function ProductsPage() {
                 ? `Вы действительно хотите удалить позицию «${getProductName(deletingProduct)}»? Если по ней уже есть складские партии или документы, она будет безопасно архивирована.`
                 : `Rostdan ham «${getProductName(deletingProduct)}» tovarini o‘chirmoqchimisiz? Agar tovar bo‘yicha partiyalar yoki hujjatlar bo‘lsa, u xavfsiz arxivlanadi.`}
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setDeletingProduct(null)} disabled={deleteLoading}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleDeleteProduct}
-                disabled={deleteLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
-              >
-                {deleteLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
@@ -552,36 +536,41 @@ export default function ProductsPage() {
 
       {/* Category Management Modal */}
       {isCategoryModalOpen && (
-        <Modal
+        <Modal icon={<Tags size={20} />}
           isOpen={isCategoryModalOpen}
           onClose={() => setIsCategoryModalOpen(false)}
           title={isRu ? 'Управление категориями товаров' : 'Mahsulot kategoriyalarini boshqarish'}
+          footer={
+            <>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
+                {isRu ? 'Закрыть' : 'Yopish'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {/* Create category form */}
-            <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', padding: '12px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                {isRu ? 'Новая категория' : 'Yangi kategoriya qo‘shish'}
+            <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: '14px 16px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
+                {isRu ? 'Новая категория' : 'Yangi kategoriya'}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-2)', alignItems: 'center' }}>
-                <input
-                  type="text"
+              <div className="cat-new-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-3)', alignItems: 'end' }}>
+                <Input
+                  label={isRu ? 'Название (узб) *' : 'Nomi (o‘zbekcha) *'}
                   required
                   value={newCatNameUz}
                   onChange={(e) => setNewCatNameUz(e.target.value)}
-                  placeholder={isRu ? 'Название (узб) *' : "Nomi (o'zbekcha) *"}
-                  style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+                  placeholder={isRu ? 'Напр. Напитки' : 'Masalan: Ichimliklar'}
                 />
-                <input
-                  type="text"
+                <Input
+                  label={isRu ? 'Название (рус)' : 'Nomi (ruscha)'}
                   value={newCatNameRu}
                   onChange={(e) => setNewCatNameRu(e.target.value)}
-                  placeholder={isRu ? 'Название (рус)' : 'Nomi (ruscha)'}
-                  style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+                  placeholder={isRu ? 'Необязательно' : 'Ixtiyoriy'}
                 />
-                <Button type="submit" size="sm" variant="primary" disabled={createCatLoading}>
-                  <Plus size={14} />
-                  {createCatLoading ? '...' : (isRu ? 'Добавить' : 'Qo‘shish')}
+                <Button type="submit" variant="primary" disabled={createCatLoading}>
+                  <Plus size={16} aria-hidden />
+                  {createCatLoading ? (isRu ? 'Добавление…' : 'Qo‘shilmoqda…') : isRu ? 'Добавить' : 'Qo‘shish'}
                 </Button>
               </div>
             </form>
@@ -589,8 +578,8 @@ export default function ProductsPage() {
             {/* Categories List */}
             <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {categories.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  {isRu ? 'Категории отсутствуют' : 'Kategoriyalar mavjud emas'}
+                <div style={{ textAlign: 'center', padding: 'var(--space-5) var(--space-4)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                  {isRu ? 'Категорий пока нет. Добавьте первую выше — товары можно будет группировать и фильтровать.' : 'Hali kategoriya yo‘q. Yuqorida birinchisini qo‘shing — tovarlarni guruhlash va saralash mumkin bo‘ladi.'}
                 </div>
               ) : (
                 categories.map((c) => {
@@ -644,67 +633,66 @@ export default function ProductsPage() {
                 })
               )}
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)' }}>
-              <Button variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
-                {isRu ? 'Закрыть' : 'Yopish'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
 
       {/* Edit Category Modal */}
       {editingCategory && (
-        <Modal
+        <Modal icon={<Pencil size={20} />}
           isOpen={Boolean(editingCategory)}
           onClose={() => setEditingCategory(null)}
           title={isRu ? 'Редактировать категорию' : 'Kategoriyani tahrirlash'}
           size="sm"
-        >
-          <form onSubmit={handleSaveEditCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, marginBottom: '4px' }}>
-                {isRu ? 'Название категории (узбекский) *' : 'Kategoriya nomi (o‘zbekcha) *'}
-              </label>
-              <input
-                type="text"
-                required
-                value={editCatNameUz}
-                onChange={(e) => setEditCatNameUz(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, marginBottom: '4px' }}>
-                {isRu ? 'Название категории (русский)' : 'Kategoriya nomi (ruscha)'}
-              </label>
-              <input
-                type="text"
-                value={editCatNameRu}
-                onChange={(e) => setEditCatNameRu(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-              />
-            </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button type="button" variant="secondary" onClick={() => setEditingCategory(null)}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button type="submit" variant="primary" disabled={editCatLoading}>
-                {editCatLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setEditingCategory(null)}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="page-form" variant="primary" disabled={editCatLoading}>
+            {editCatLoading ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+          <form id="page-form" onSubmit={handleSaveEditCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+            <Input
+              label={isRu ? 'Название категории (узбекский) *' : 'Kategoriya nomi (o‘zbekcha) *'}
+              required
+              value={editCatNameUz}
+              onChange={(e) => setEditCatNameUz(e.target.value)}
+            />
+            <Input
+              label={isRu ? 'Название категории (русский)' : 'Kategoriya nomi (ruscha)'}
+              value={editCatNameRu}
+              onChange={(e) => setEditCatNameRu(e.target.value)}
+            />
+      </form>
+    </Modal>
       )}
 
       {/* Delete Category Confirm Modal */}
       {deletingCategory && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={Boolean(deletingCategory)}
           onClose={() => setDeletingCategory(null)}
-          title={isRu ? 'Удалить категорию?' : 'Kategoriyani o‘chirishni tasdiqlaysizmi?'}
+          title={isRu ? 'Удалить категорию?' : 'Kategoriya o‘chirilsinmi?'}
           size="sm"
+          footer={
+            <>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeletingCategory(null)} disabled={deleteCatLoading}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleDeleteCategory}
+                disabled={deleteCatLoading}
+              >
+                {deleteCatLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
@@ -712,19 +700,6 @@ export default function ProductsPage() {
                 ? `Вы действительно хотите удалить категорию «${typeof deletingCategory.name === 'object' ? (deletingCategory.name[locale] || deletingCategory.name.ru || deletingCategory.name.uz) : deletingCategory.name}»? Товары в этой категории останутся без категории.`
                 : `Rostdan ham «${typeof deletingCategory.name === 'object' ? (deletingCategory.name[locale] || deletingCategory.name.uz || deletingCategory.name.ru) : deletingCategory.name}» kategoriyasini o‘chirmoqchimisiz? Ushbu kategoriyadagi tovarlar kategoriyasiz holatga o‘tadi.`}
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setDeletingCategory(null)} disabled={deleteCatLoading}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleDeleteCategory}
-                disabled={deleteCatLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
-              >
-                {deleteCatLoading ? (isRu ? 'Удаление...' : 'O‘chirilmoqda...') : (isRu ? 'Удалить' : 'O‘chirish')}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}

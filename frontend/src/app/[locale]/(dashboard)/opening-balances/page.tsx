@@ -29,6 +29,7 @@ import {
   type CounterpartyLineKind,
 } from '@/lib/opening-balance-lines';
 import { computeOpeningBalanceTotals } from '@shared/types/opening-balance-posting';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -53,15 +54,11 @@ import {
   Wallet,
   Package,
   Users,
-  Building2,
   Layers,
-  TrendingUp,
-  TrendingDown,
   Building,
   ArrowRight,
   Check,
-  Calculator,
-} from 'lucide-react';
+  Calculator, FilePlus2, LockOpen, Building2 } from 'lucide-react';
 import type {
   OpeningBalanceDocument,
   OpeningBalanceLine,
@@ -779,7 +776,7 @@ export default function OpeningBalancesPage() {
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
                 {currentDoc && !isReadOnly && (
                   <>
-                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="ghost" size="sm" onClick={handleDeleteDocument} disabled={actionLoading} style={{ color: 'var(--color-error-700)' }}>
+                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="danger-ghost" size="sm" onClick={handleDeleteDocument} disabled={actionLoading}>
                       <Trash2 size={14} aria-hidden />
                     </Button>
                     <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading}>
@@ -793,7 +790,7 @@ export default function OpeningBalancesPage() {
                   </>
                 )}
                 {currentDoc && isPosted && (
-                  <Button variant="secondary" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}>
+                  <Button variant="danger-outline" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                     <RotateCcw size={14} />
                     <span>{isRu ? 'Переоткрыть' : 'Qayta ochish'}</span>
                   </Button>
@@ -817,33 +814,28 @@ export default function OpeningBalancesPage() {
           </Card>
 
           {/* Summary: assets, liabilities, capital (balances itself) */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))', gap: 'var(--space-4)' }}>
-            <SummaryCard
-              color="var(--color-success-700)"
-              icon={<TrendingUp size={20} />}
-              title={isRu ? 'Активы' : 'Aktivlar'}
+          <StatCardGrid label={isRu ? 'Итоги баланса' : 'Balans yakunlari'} count={3}>
+            <StatCard
+              label={isRu ? 'Активы' : 'Aktivlar'}
               value={formatCurrency(totals.totalAssets, locale, docCurrency)}
-              hint={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
+              secondary={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
             />
-            <SummaryCard
-              color="var(--color-error-700)"
-              icon={<TrendingDown size={20} />}
-              title={isRu ? 'Обязательства' : 'Majburiyatlar'}
+            <StatCard
+              label={isRu ? 'Обязательства' : 'Majburiyatlar'}
               value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
-              hint={isRu ? 'Долги поставщикам, полученные авансы' : 'Yetkazib beruvchilarga qarz, olingan avanslar'}
+              secondary={isRu ? 'Долги поставщикам, полученные авансы' : 'Yetkazib beruvchilarga qarz, olingan avanslar'}
             />
-            <SummaryCard
-              color="#6366f1"
-              icon={<Building2 size={20} />}
-              title={isRu ? 'Капитал (рассчитан)' : 'Kapital (hisoblangan)'}
+            <StatCard
+              label={isRu ? 'Капитал (рассчитан)' : 'Kapital (hisoblangan)'}
               value={formatCurrency(totals.totalEquity, locale, docCurrency)}
-              hint={
+              negative={totals.totalEquity < 0}
+              secondary={
                 isRu
                   ? `Уставный: ${formatCurrency(totals.enteredEquity, locale, docCurrency)} · Нераспр. прибыль: ${formatCurrency(totals.retainedEarnings, locale, docCurrency)}`
                   : `Ustav: ${formatCurrency(totals.enteredEquity, locale, docCurrency)} · Taqsimlanmagan foyda: ${formatCurrency(totals.retainedEarnings, locale, docCurrency)}`
               }
             />
-          </div>
+          </StatCardGrid>
           {!totals.hasValidCurrencyRates && !isReadOnly && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
               <AlertTriangle size={16} />
@@ -1018,7 +1010,18 @@ export default function OpeningBalancesPage() {
       )}
 
       {/* New document */}
-      <Modal isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}>
+      <Modal icon={<FilePlus2 size={20} />} isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}
+        footer={
+          <>
+            <Button data-dialog-cancel variant="secondary" onClick={() => setShowNewDocModal(false)}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button variant="primary" onClick={handleCreateDocument} disabled={actionLoading}>
+              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать' : 'Yaratish'}
+            </Button>
+          </>
+        }
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
@@ -1035,19 +1038,30 @@ export default function OpeningBalancesPage() {
             </label>
             <Input type="text" value={newDocNotes} onChange={(e) => setNewDocNotes(e.target.value)} placeholder={isRu ? 'Необязательно' : 'Ixtiyoriy'} />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <Button variant="secondary" onClick={() => setShowNewDocModal(false)}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button variant="primary" onClick={handleCreateDocument} disabled={actionLoading}>
-              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать' : 'Yaratish'}
-            </Button>
-          </div>
         </div>
       </Modal>
 
       {/* Excel import (template download included) */}
-      <Modal isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}>
+      <Modal icon={<FileSpreadsheet size={20} />} isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}
+        footer={
+          <>
+            <Button data-dialog-cancel variant="secondary" onClick={closeImportModal}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            {importSummary?.canCommit ? (
+              <Button variant="primary" onClick={handleCommitImport} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Save size={16} />
+                <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить в документ' : 'Hujjatga saqlash'}</span>
+              </Button>
+            ) : (
+              <Button variant="primary" onClick={handlePreviewImport} disabled={!importFile || importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <Upload size={16} />
+                <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Проверить файл' : 'Faylni tekshirish'}</span>
+              </Button>
+            )}
+          </>
+        }
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <ol style={{ margin: 0, paddingLeft: 18, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 6 }}>
             <li>
@@ -1125,28 +1139,22 @@ export default function OpeningBalancesPage() {
               )}
             </div>
           )}
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <Button variant="secondary" onClick={closeImportModal}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            {importSummary?.canCommit ? (
-              <Button variant="primary" onClick={handleCommitImport} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Save size={16} />
-                <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить в документ' : 'Hujjatga saqlash'}</span>
-              </Button>
-            ) : (
-              <Button variant="primary" onClick={handlePreviewImport} disabled={!importFile || importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Upload size={16} />
-                <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Проверить файл' : 'Faylni tekshirish'}</span>
-              </Button>
-            )}
-          </div>
         </div>
       </Modal>
 
       {/* Unpost (rollback invariant) */}
-      <Modal isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}>
+      <Modal icon={<LockOpen size={20} />} tone="warning" isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}
+        footer={
+          <>
+            <Button data-dialog-cancel variant="secondary" onClick={() => setShowUnpostModal(false)}>
+              {isRu ? 'Отмена' : 'Bekor qilish'}
+            </Button>
+            <Button variant="danger" onClick={handleUnpost} disabled={actionLoading}>
+              {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Переоткрыть' : 'Qayta ochish'}
+            </Button>
+          </>
+        }
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', border: '1px solid var(--color-warning-100)', display: 'flex', gap: '10px' }}>
             <AlertTriangle size={20} color="var(--color-warning-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
@@ -1167,14 +1175,6 @@ export default function OpeningBalancesPage() {
               onChange={(e) => setUnpostReason(e.target.value)}
             />
           </div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '12px' }}>
-            <Button variant="secondary" onClick={() => setShowUnpostModal(false)}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button variant="primary" onClick={handleUnpost} disabled={actionLoading} style={{ backgroundColor: 'var(--color-error-600)', borderColor: 'var(--color-error-600)' }}>
-              {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Переоткрыть' : 'Qayta ochish'}
-            </Button>
-          </div>
         </div>
       </Modal>
     </div>
@@ -1185,22 +1185,6 @@ export default function OpeningBalancesPage() {
 // Building blocks
 // ─────────────────────────────────────────────────────────────────────────────
 
-function SummaryCard({ color, icon, title, value, hint }: { color: string; icon: React.ReactNode; title: string; value: string; hint: string }) {
-  return (
-    <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-3)', borderLeft: `4px solid ${color}` }}>
-      <div style={{ width: 40, height: 40, borderRadius: 'var(--radius-md)', backgroundColor: `color-mix(in srgb, ${color} 10%, transparent)`, display: 'flex', alignItems: 'center', justifyContent: 'center', color, flexShrink: 0 }}>
-        {icon}
-      </div>
-      <div style={{ overflow: 'hidden' }}>
-        <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{title}</div>
-        <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }} className="tabular-nums">
-          {value}
-        </div>
-        <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)' }}>{hint}</div>
-      </div>
-    </Card>
-  );
-}
 
 /** Where a posted opening balance can be seen in the rest of the system. */
 function PostedLinks({ isRu }: { isRu: boolean }) {
@@ -1708,7 +1692,18 @@ function NewFixedAssetModal({
   };
 
   return (
-    <Modal isOpen title={isRu ? 'Новое основное средство' : 'Yangi asosiy vosita'} onClose={onClose}>
+    <Modal icon={<Building2 size={20} />} isOpen title={isRu ? 'Новое основное средство' : 'Yangi asosiy vosita'} onClose={onClose}
+      footer={
+        <>
+          <Button data-dialog-cancel variant="secondary" onClick={onClose}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button variant="primary" onClick={submit} disabled={saving}>
+            {saving ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Добавить' : 'Qo‘shish'}
+          </Button>
+        </>
+      }
+    >
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
         <div style={{ gridColumn: '1 / -1' }}>
           {label(isRu ? 'Название' : 'Nomi')}
@@ -1759,14 +1754,6 @@ function NewFixedAssetModal({
               {isRu ? 'Рассчитать' : 'Hisoblash'}
             </Button>
           </div>
-        </div>
-        <div style={{ gridColumn: '1 / -1', display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 8 }}>
-          <Button variant="secondary" onClick={onClose}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button variant="primary" onClick={submit} disabled={saving}>
-            {saving ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Добавить' : 'Qo‘shish'}
-          </Button>
         </div>
       </div>
     </Modal>

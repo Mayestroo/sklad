@@ -211,12 +211,15 @@ export default function DesignSystemPage() {
       </Card>
 
       {/* Modal Demo */}
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Design System Modal Showcase">
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Design System Modal Showcase"
+        footer={
+          <>
+            <Button variant="primary" onClick={() => setModalOpen(false)}>Tushunarli</Button>
+          </>
+        }
+      >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', fontSize: 'var(--text-sm)' }}>
           <div>Ushbu modal oynasi barcha brauzerlarda va Light/Dark rejimlarda mukammal moslashuvchan (Responsive) ishlaydi.</div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-            <Button variant="primary" onClick={() => setModalOpen(false)}>Tushunarli</Button>
-          </div>
         </div>
       </Modal>
     </div>

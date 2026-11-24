@@ -60,7 +60,7 @@
   "width": 1440,
   "step": "dropdown shows value",
   "ok": true,
-  "note": "To‘lov : To‘lanmagan"
+  "note": "To‘lov: To‘lanmagan"
  },
  {
   "locale": "uz",
@@ -235,7 +235,7 @@
   "width": 1440,
   "step": "dropdown shows value",
   "ok": true,
-  "note": "Оплата : Не оплачен"
+  "note": "Оплата: Не оплачен"
  },
  {
   "locale": "ru",

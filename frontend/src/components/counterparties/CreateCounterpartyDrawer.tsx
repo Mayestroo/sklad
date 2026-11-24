@@ -197,10 +197,10 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
           : defaultType === 'SUPPLIER'
           ? isRu
             ? 'Новый поставщик'
-            : 'Yangi Yetkazib Beruvchi'
+            : 'Yangi yetkazib beruvchi'
           : isRu
           ? 'Новый контрагент'
-          : 'Yangi Kontragent'
+          : 'Yangi kontragent'
       }
       description={
         isEdit
@@ -216,7 +216,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
       onSubmitShortcut={handleSubmit}
       footer={
         <>
-          <Button
+          <Button data-dialog-cancel
             type="button"
             variant="secondary"
             onClick={() => {
@@ -225,7 +225,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
             }}
             disabled={loading}
           >
-            {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
+            {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button
             type="button"
@@ -239,7 +239,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
             ) : (
               <>
                 <CheckCircle2 size={16} />
-                {isRu ? 'Сохранить (Ctrl+Enter)' : 'Saqlash (Ctrl+Enter)'}
+                {isRu ? 'Сохранить' : 'Saqlash'}
               </>
             )}
           </Button>
@@ -360,9 +360,9 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
 
         {/* Pricing & Loyalty Discounts */}
         <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
-          <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>
+          <h3 className="dlg-section" style={{ marginBottom: 'var(--space-3)', borderTop: 'none', paddingTop: 0 }}>
             {isRu ? 'Цены и скидки' : 'Narxlar va chegirmalar'}
-          </h4>
+          </h3>
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 'var(--space-3)' }}>
             <div>
@@ -383,9 +383,9 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
 
         {/* Bank Details Section */}
         <div style={{ borderTop: '1px solid var(--color-border-light)', paddingTop: 'var(--space-3)', marginTop: 'var(--space-1)' }}>
-          <h4 style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-text-tertiary)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 'var(--space-3)' }}>
+          <h3 className="dlg-section" style={{ marginBottom: 'var(--space-3)', borderTop: 'none', paddingTop: 0 }}>
             {isRu ? 'Банковские реквизиты' : 'Bank rekvizitlari'}
-          </h4>
+          </h3>
 
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
             <div>
@@ -428,7 +428,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
         </div>
 
         {/* Required fields indicator */}
-        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 600, paddingTop: '8px', borderTop: '1px solid var(--color-border-light)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', paddingTop: '8px', borderTop: '1px solid var(--color-border-light)' }}>
           <span>* {isRu ? 'поля, обязательные для заполнения' : 'bilan belgilangan maydonlar to‘ldirilishi majburiy'}</span>
         </div>
       </form>

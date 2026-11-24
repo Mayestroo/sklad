@@ -5,7 +5,8 @@ import React, { useState, useMemo } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { usePersistentState } from '@/lib/usePersistentState';
-import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, SegmentedFilter, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -16,8 +17,6 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { SearchField } from '@/components/ui/SearchField';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { ServiceActDrawer } from '@/components/services/ServiceActDrawer';
 import { ServiceActDetailsModal } from '@/components/services/ServiceActDetailsModal';
 import { ServiceActPrintView } from '@/components/services/ServiceActPrintView';
@@ -34,6 +33,8 @@ import {
 } from 'lucide-react';
 import type { ServiceActDetail } from '@/lib/service-act';
 
+const FILTER_DEFAULTS = { status: '', paymentStatus: '' };
+
 export default function ServicesPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -44,12 +45,14 @@ export default function ServicesPage() {
   // Active Tab: PROVIDED vs RECEIVED
   const [activeType, setActiveType] = useState<'PROVIDED' | 'RECEIVED'>('PROVIDED');
 
-  // Filters
-  const [search, setSearch] = useState('');
-  const debouncedSearch = useDebouncedValue(search, 300);
-  const [statusFilter, setStatusFilter] = useState('');
-  const [paymentStatusFilter, setPaymentStatusFilter] = useState('');
-  const [page, setPage] = useState(1);
+  // Filters live in the URL and are remembered per user; a new filter or act type starts again from page 1.
+  const lf = useFilterState('services.list', FILTER_DEFAULTS);
+  const debouncedSearch = lf.debouncedSearch;
+  const { status: statusFilter, paymentStatus: paymentStatusFilter } = lf.values;
+  const filterKey = `${activeType}|${debouncedSearch}|${statusFilter}|${paymentStatusFilter}`;
+  const [pageAt, setPageAt] = useState({ key: '', page: 1 });
+  const page = pageAt.key === filterKey ? pageAt.page : 1;
+  const setPage = (next: number | ((p: number) => number)) => setPageAt({ key: filterKey, page: typeof next === 'function' ? next(page) : next });
   const pageSize = 20;
 
 
@@ -218,13 +221,10 @@ export default function ServicesPage() {
   };
 
   const handleResetFilters = () => {
-    setSearch('');
-    setStatusFilter('');
-    setPaymentStatusFilter('');
-    setPage(1);
+    lf.reset();
   };
 
-  const isFiltered = Boolean(search || statusFilter || paymentStatusFilter);
+  const isFiltered = Boolean(debouncedSearch || lf.activeCount > 0);
   const counterpartyLabel = activeType === 'PROVIDED' ? (isRu ? 'Клиент' : 'Mijoz') : isRu ? 'Поставщик' : 'Yetkazib beruvchi';
   const statusMeta = (s: string) =>
     s === 'POSTED'
@@ -248,10 +248,7 @@ export default function ServicesPage() {
   const [sort, setSort] = usePersistentState<SortState | null>('services.sort', null);
   /** Either kind of act can be started from the header, whatever list is shown. */
   const openCreate = (type: 'PROVIDED' | 'RECEIVED') => {
-    if (type !== activeType) {
-      setActiveType(type);
-      setPage(1);
-    }
+    if (type !== activeType) setActiveType(type);
     handleOpenCreate();
   };
   const columns: Column<ServiceActDetail>[] = [
@@ -322,7 +319,28 @@ export default function ServicesPage() {
       ),
     },
   ];
-  const debtOnly = statusFilter === 'POSTED' && paymentStatusFilter === 'UNPAID';
+  const filterDefs: FilterDef[] = [
+    {
+      key: 'status',
+      kind: 'segmented',
+      label: tl('status'),
+      options: [
+        { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
+        { value: 'POSTED', label: isRu ? 'Проведён' : 'Tasdiqlangan' },
+        { value: 'CANCELLED', label: isRu ? 'Отменён' : 'Bekor qilingan' },
+      ],
+    },
+    {
+      key: 'paymentStatus',
+      kind: 'select',
+      label: tl('payment'),
+      options: [
+        { value: 'UNPAID', label: isRu ? 'Не оплачен' : 'To‘lanmagan' },
+        { value: 'PARTIALLY_PAID', label: isRu ? 'Частично' : 'Qisman' },
+        { value: 'PAID', label: isRu ? 'Оплачен' : 'To‘langan' },
+      ],
+    },
+  ];
 
   return (
     <div className="rd-page">
@@ -341,86 +359,38 @@ export default function ServicesPage() {
         }
       />
 
-      <SignalStrip label={tl('summary')}>
-        <Signal tone="info" label={isRu ? 'Сумма актов' : 'Aktlar summasi'} value={moneyLines(amountByCurrency)} hint={pageNote} />
-        <Signal tone="success" label={isRu ? 'Оплачено' : 'To‘langan'} value={moneyLines(paidByCurrency)} hint={paidShare} />
-        <Signal
-          tone="warning"
-          label={activeType === 'PROVIDED' ? (isRu ? 'Должны клиенты' : 'Mijozlar qarzi') : isRu ? 'Мы должны поставщикам' : 'Yetkazib beruvchilarga qarzimiz'}
-          value={moneyLines(debtByCurrency)}
-          hint={tsv('debtHint')}
-          active={debtOnly}
-          onClick={() => {
-            setStatusFilter(debtOnly ? '' : 'POSTED');
-            setPaymentStatusFilter(debtOnly ? '' : 'UNPAID');
-            setPage(1);
-          }}
+      {/* Which acts (not a filter: it also decides the primary "new act" button) */}
+      <div className="rd-toolbar-row">
+        <SegmentedFilter
+          name="type"
+          label={isRu ? 'Вид актов' : 'Aktlar turi'}
+          options={[
+            { value: 'PROVIDED', label: isRu ? 'Оказанные услуги' : 'Ko‘rsatilgan xizmatlar' },
+            { value: 'RECEIVED', label: isRu ? 'Полученные услуги' : 'Olingan xizmatlar' },
+          ]}
+          value={activeType}
+          onChange={(v) => v && setActiveType(v as 'PROVIDED' | 'RECEIVED')}
         />
-      </SignalStrip>
-
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <ChipGroup
-            label={isRu ? 'Вид актов' : 'Aktlar turi'}
-            options={[
-              { value: 'PROVIDED', label: isRu ? 'Оказанные услуги' : 'Ko‘rsatilgan xizmatlar' },
-              { value: 'RECEIVED', label: isRu ? 'Полученные услуги' : 'Olingan xizmatlar' },
-            ]}
-            value={activeType}
-            onChange={(v) => {
-              if (!v) return;
-              setActiveType(v as 'PROVIDED' | 'RECEIVED');
-              setPage(1);
-            }}
-          />
-          <SearchField
-            value={search}
-            onChange={(v) => {
-              setSearch(v);
-              setPage(1);
-            }}
-            placeholder={isRu ? '№ акта, контрагент или заметка' : 'Akt №, kontragent yoki izoh'}
-            label={tl('search')}
-          />
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup
-            label={tl('status')}
-            showLabel
-            options={[
-              { value: '', label: tl('all') },
-              { value: 'DRAFT', label: isRu ? 'Черновик' : 'Qoralama' },
-              { value: 'POSTED', label: isRu ? 'Проведён' : 'Tasdiqlangan' },
-              { value: 'CANCELLED', label: isRu ? 'Отменён' : 'Bekor qilingan' },
-            ]}
-            value={statusFilter}
-            onChange={(v) => {
-              setStatusFilter(v);
-              setPage(1);
-            }}
-          />
-          <ChipGroup
-            label={tl('payment')}
-            showLabel
-            options={[
-              { value: 'UNPAID', label: isRu ? 'Не оплачен' : 'To‘lanmagan' },
-              { value: 'PARTIALLY_PAID', label: isRu ? 'Частично' : 'Qisman' },
-              { value: 'PAID', label: isRu ? 'Оплачен' : 'To‘langan' },
-            ]}
-            value={paymentStatusFilter}
-            onChange={(v) => {
-              setPaymentStatusFilter(v);
-              setPage(1);
-            }}
-          />
-          {isFiltered && (
-            <button type="button" className="rd-linkbtn" onClick={handleResetFilters}>
-              {tl('clearAll')}
-            </button>
-          )}
-        </div>
       </div>
+
+      <StatCardGrid label={tl('summary')} count={3}>
+        <StatCard label={isRu ? 'Сумма актов' : 'Aktlar summasi'} loading={loading} value={moneyLines(amountByCurrency)} secondary={pageNote} />
+        <StatCard label={isRu ? 'Оплачено' : 'To‘langan'} loading={loading} value={moneyLines(paidByCurrency)} secondary={paidShare} />
+        <StatCard
+          label={activeType === 'PROVIDED' ? (isRu ? 'Должны клиенты' : 'Mijozlar qarzi') : isRu ? 'Мы должны поставщикам' : 'Yetkazib beruvchilarga qarzimiz'}
+          loading={loading}
+          value={moneyLines(debtByCurrency)}
+          secondary={tsv('debtHint')}
+        />
+      </StatCardGrid>
+
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={isRu ? '№ акта, контрагент или заметка' : 'Akt №, kontragent yoki izoh'}
+        resultCount={loading ? null : total}
+        columns={<ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {actsQuery.isError ? (

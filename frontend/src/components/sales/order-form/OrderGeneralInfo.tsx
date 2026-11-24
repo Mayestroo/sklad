@@ -76,7 +76,7 @@ export function OrderGeneralInfo({
   return (
     <Card style={{ padding: 'var(--space-6)', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
       <h3 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', color: 'var(--color-text-primary)' }}>
-        {isRu ? 'Основная информация' : 'Asosiy Hujjat Ma’lumotlari'}
+        {isRu ? 'Основная информация' : 'Asosiy hujjat ma’lumotlari'}
       </h3>
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)', alignItems: 'flex-start' }}>

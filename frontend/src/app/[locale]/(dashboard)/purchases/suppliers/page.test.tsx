@@ -28,6 +28,9 @@ const counterparties = [
 
 describe('Suppliers page', () => {
   beforeEach(() => {
+    // Filters live in the URL and localStorage: each test starts from a clean view.
+    window.history.replaceState(null, '', '/');
+    window.localStorage.clear();
     apiFetch.mockReset();
   });
 

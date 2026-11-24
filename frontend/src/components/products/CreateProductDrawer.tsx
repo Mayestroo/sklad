@@ -2,7 +2,7 @@
 
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -14,11 +14,10 @@ import { Modal } from '@/components/ui/Modal';
 import { CURRENCY_OPTIONS, errorMessage, formatCurrency } from '@/lib/utils';
 import { useSalesDefaultCurrency } from '@/hooks/useSalesDefaultCurrency';
 import { toast } from '@/context/ToastContext';
-import { PackagePlus, AlertCircle, CheckCircle2, Plus } from 'lucide-react';
+import { PackagePlus, AlertCircle, CheckCircle2, Plus, Tag, Ruler } from 'lucide-react';
 import type { Category } from '@shared/types';
 import { editedProductName } from '@/lib/product-name';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { useConfirm } from '@/context/ConfirmContext';
 import { unitLabel } from '@/lib/units';
 import { productTypeLabel } from '@/lib/product-types';
 import { unitOptionsFor } from '@/lib/production-recipe';
@@ -85,7 +84,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   allowedTypes,
   onSuccess,
 }) => {
-  const confirm = useConfirm();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
@@ -97,7 +95,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const [isSemiFinished, setIsSemiFinished] = useState(false);
   const [unitRows, setUnitRows] = useState<UnitRow[]>([]);
   const [duplicates, setDuplicates] = useState<string[]>([]);
-  const dirty = useRef(false);
   const isFinished = itemType === 'FINISHED_PRODUCT';
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
@@ -183,13 +180,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         setIsSemiFinished(Boolean(productToEdit.isSemiFinished));
         setUnitRows((productToEdit.units ?? []).map((u) => ({ key: ++unitRowKey, name: u.name, factor: String(Number(u.factor)) })));
         setError(null);
-        dirty.current = false;
 
       } else {
         setItemType(initialType || 'PRODUCT');
         setIsSemiFinished(false);
         setUnitRows([]);
-        dirty.current = false;
         setCostPriceCurrency('');
         setCostPriceExchangeRate('');
         setSalePriceCurrency(salesDefault ?? '');
@@ -343,7 +338,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
       // TZ 3.3: a finished product gets stock only from production.
       const savedQuantity = isFinished ? 0 : numQty;
-      dirty.current = false;
       resetForm();
       if (onSuccess) onSuccess(res, savedQuantity);
       onClose();
@@ -371,21 +365,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setUnitRows([]);
     setDuplicates([]);
     setError(null);
-    dirty.current = false;
   };
 
-  /** TZ 11.5: unsaved input asks before the drawer closes. */
-  const requestClose = async () => {
-    if (dirty.current) {
-      const ok = await confirm({
-        title: isRu ? 'Закрыть без сохранения?' : 'Saqlamasdan yopilsinmi?',
-        description: isRu ? 'Введённые данные будут потеряны.' : 'Kiritilgan ma’lumotlar yo‘qoladi.',
-        variant: 'warning',
-        confirmText: isRu ? 'Закрыть' : 'Yopish',
-        cancelText: isRu ? 'Продолжить ввод' : 'Davom etish',
-      });
-      if (!ok) return;
-    }
+  /** TZ 11.5: the drawer itself asks before unsaved input is lost (backdrop, Esc, ✕, Cancel). */
+  const requestClose = () => {
     resetForm();
     onClose();
   };
@@ -445,10 +428,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
   const getDrawerTitle = () => {
     if (isEdit) return isRu ? 'Редактировать позицию' : 'Pozitsiyani tahrirlash';
-    if (itemType === 'RAW_MATERIAL') return isRu ? 'Новое сырьё / материал' : 'Yangi Xomashyo Qo‘shish';
-    if (itemType === 'SERVICE') return isRu ? 'Новая услуга' : 'Yangi Xizmat Qo‘shish';
-    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Новый готовый продукт' : 'Yangi Tayyor mahsulot qo‘shish';
-    return isRu ? 'Новый товар' : 'Yangi Tovar Qo‘shish';
+    if (itemType === 'RAW_MATERIAL') return isRu ? 'Новое сырьё / материал' : 'Yangi xomashyo qo‘shish';
+    if (itemType === 'SERVICE') return isRu ? 'Новая услуга' : 'Yangi xizmat qo‘shish';
+    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Новый готовый продукт' : 'Yangi tayyor mahsulot qo‘shish';
+    return isRu ? 'Новый товар' : 'Yangi tovar qo‘shish';
   };
 
   const getDrawerDescription = () => {
@@ -478,17 +461,17 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   };
 
   const getSubmitLabel = () => {
-    if (isEdit) return isRu ? 'Сохранить изменения (Ctrl+Enter)' : 'O‘zgarishlarni saqlash (Ctrl+Enter)';
-    if (itemType === 'RAW_MATERIAL') return isRu ? 'Сохранить сырьё (Ctrl+Enter)' : 'Xomashyoni saqlash (Ctrl+Enter)';
-    if (itemType === 'SERVICE') return isRu ? 'Сохранить услугу (Ctrl+Enter)' : 'Xizmatni saqlash (Ctrl+Enter)';
-    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Сохранить продукт (Ctrl+Enter)' : 'Mahsulotni saqlash (Ctrl+Enter)';
-    return isRu ? 'Сохранить товар (Ctrl+Enter)' : 'Tovarni saqlash (Ctrl+Enter)';
+    if (isEdit) return isRu ? 'Сохранить изменения' : 'O‘zgarishlarni saqlash';
+    if (itemType === 'RAW_MATERIAL') return isRu ? 'Сохранить сырьё' : 'Xomashyoni saqlash';
+    if (itemType === 'SERVICE') return isRu ? 'Сохранить услугу' : 'Xizmatni saqlash';
+    if (itemType === 'FINISHED_PRODUCT') return isRu ? 'Сохранить продукт' : 'Mahsulotni saqlash';
+    return isRu ? 'Сохранить товар' : 'Tovarni saqlash';
   };
 
   return (
     <Drawer
       isOpen={isOpen}
-      onClose={() => void requestClose()}
+      onClose={() => requestClose()}
       title={getDrawerTitle()}
       description={getDrawerDescription()}
       icon={<PackagePlus size={20} />}
@@ -496,13 +479,13 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       onSubmitShortcut={handleSubmit}
       footer={
         <>
-          <Button
+          <Button data-dialog-cancel
             type="button"
             variant="secondary"
-            onClick={() => void requestClose()}
+            onClick={() => requestClose()}
             disabled={loading}
           >
-            {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
+            {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button
             type="button"
@@ -545,7 +528,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       <form
         onSubmit={handleSubmit}
         onInput={() => {
-          dirty.current = true;
         }}
         style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}
       >
@@ -565,7 +547,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
                   aria-checked={active}
                   disabled={lockType}
                   onClick={() => {
-                    dirty.current = true;
                     setItemType(type);
                   }}
                   style={{
@@ -597,7 +578,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
                 description={isRu ? 'Используется как сырьё в других рецептурах' : 'Boshqa retseptalarda xomashyo sifatida ishlatiladi'}
                 checked={isSemiFinished}
                 onChange={(event) => {
-                  dirty.current = true;
                   setIsSemiFinished(event.target.checked);
                 }}
               />
@@ -829,7 +809,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
                   aria-label={isRu ? 'Удалить единицу' : 'Birlikni o‘chirish'}
                   title={isRu ? 'Удалить единицу' : 'Birlikni o‘chirish'}
                   onClick={() => {
-                    dirty.current = true;
                     setUnitRows((rows) => rows.filter((r) => r.key !== row.key));
                   }}
                   style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-700)', cursor: 'pointer' }}
@@ -843,7 +822,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               variant="outline"
               size="sm"
               onClick={() => {
-                dirty.current = true;
                 setUnitRows((rows) => [...rows, { key: ++unitRowKey, name: '', factor: '' }]);
               }}
             >
@@ -853,13 +831,24 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         )}
         </form>
 
-      <Modal
+      <Modal icon={<Tag size={20} />}
         isOpen={showNewCategoryModal}
         onClose={() => setShowNewCategoryModal(false)}
         title={isRu ? 'Новая категория' : 'Yangi kategoriya'}
         size="sm"
-      >
-        <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setShowNewCategoryModal(false)}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="create-product-drawer-form" disabled={creatingCategory}>
+            {isRu ? 'Создать' : 'Yaratish'}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('create-product-drawer-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+        <form id="create-product-drawer-form" onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <Input
             label={isRu ? 'Название на узбекском *' : 'O‘zbekcha nomi *'}
             value={newCategoryNameUz}
@@ -872,18 +861,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
             value={newCategoryNameRu}
             onChange={(event) => setNewCategoryNameRu(event.target.value)}
           />
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-            <Button type="button" variant="secondary" onClick={() => setShowNewCategoryModal(false)}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button type="submit" disabled={creatingCategory}>
-              {isRu ? 'Создать' : 'Yaratish'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
 
-      <Modal
+      <Modal icon={<Ruler size={20} />}
         isOpen={showNewUnitModal}
         onClose={() => {
           setShowNewUnitModal(false);
@@ -892,8 +873,28 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         }}
         title={isRu ? 'Новая единица измерения' : 'Yangi o‘lchov birligi'}
         size="sm"
-      >
-        <form onSubmit={handleAddCustomUnit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
+      footer={
+        <>
+          <Button data-dialog-cancel
+            type="button"
+            variant="secondary"
+            onClick={() => {
+              setShowNewUnitModal(false);
+              setNewUnitName('');
+              setNewUnitCode('');
+            }}
+          >
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="create-product-drawer-form-2" variant="primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Plus size={16} />
+            {isRu ? 'Добавить' : 'Qo‘shish'}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('create-product-drawer-form-2') as HTMLFormElement | null)?.requestSubmit()}
+    >
+        <form id="create-product-drawer-form-2" onSubmit={handleAddCustomUnit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: 'var(--space-2) 0' }}>
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: '6px' }}>
               {isRu ? 'Название единицы * (напр. Грамм, Рулон)' : 'Birlik nomi * (masalan: Gramm, Rulon, Qop)'}
@@ -933,26 +934,8 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               onChange={(val) => setNewUnitBaseType(val)}
             />
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-3)' }}>
-            <Button
-              type="button"
-              variant="secondary"
-              onClick={() => {
-                setShowNewUnitModal(false);
-                setNewUnitName('');
-                setNewUnitCode('');
-              }}
-            >
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button type="submit" variant="primary" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Plus size={16} />
-              {isRu ? 'Добавить' : 'Qo‘shish'}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
     </Drawer>
   );
 };

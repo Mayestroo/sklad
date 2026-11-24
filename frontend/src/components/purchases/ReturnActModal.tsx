@@ -5,7 +5,7 @@ import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { Printer } from 'lucide-react';
+import { Printer, FileText } from 'lucide-react';
 import { formatCurrency, formatDate, formatQuantity, getLocalizedName, type LocalizedName } from '@/lib/utils';
 import { PurchaseReturn } from '@shared/types';
 
@@ -45,10 +45,10 @@ export function ReturnActModal({ isOpen, onClose, purchaseReturn }: ReturnActMod
   const totalAmount = Number(purchaseReturn.totalAmount || subtotal + totalVat);
 
   return (
-    <Modal
+    <Modal icon={<FileText size={20} />}
       isOpen={isOpen}
       onClose={onClose}
-      title={`${isRu ? 'Акт возврата товаров №' : 'Qaytarish Dalolatnomasi №'} ${purchaseReturn.returnNumber}`}
+      title={`${isRu ? 'Акт возврата товаров №' : 'Qaytarish dalolatnomasi №'} ${purchaseReturn.returnNumber}`}
     >
       <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', maxWidth: '850px', width: '100%' }}>
         {/* Action Toolbar */}

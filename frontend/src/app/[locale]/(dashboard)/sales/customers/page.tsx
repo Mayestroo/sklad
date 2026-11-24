@@ -5,7 +5,8 @@ import { useAuth } from '@/context/AuthContext';
 import { useLocale, useTranslations } from 'next-intl';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { QuickPaymentModal } from '@/components/counterparties/QuickPaymentModal';
-import { ChipGroup, ColumnChooser, Signal, SignalStrip } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { Link } from '@/i18n/navigation';
 import { apiFetch } from '@/lib/api';
@@ -17,9 +18,9 @@ import { Button } from '@/components/ui/Button';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { matchesSearch } from '@/components/ui/SearchField';
 import { DocumentStatusBadge } from '@/components/ui/DocumentStatusBadge';
-import { Users, Plus, CreditCard } from 'lucide-react';
+import { Users, Plus, CreditCard, UserRound } from 'lucide-react';
 import { Modal } from '@/components/ui/Modal';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
 import { CreateCounterpartyDrawer } from '@/components/counterparties/CreateCounterpartyDrawer';
@@ -71,6 +72,8 @@ function DebtLines({ balances, locale }: { balances: NonNullable<Customer['balan
   );
 }
 
+const FILTER_DEFAULTS = { show: '' };
+
 export default function CustomersPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
@@ -81,8 +84,10 @@ export default function CustomersPage() {
   const customersQuery = useApiQuery<Customer[]>('/sales/counterparties?type=CUSTOMER');
   const customers = useMemo(() => customersQuery.data ?? [], [customersQuery.data]);
   const loading = customersQuery.isPending;
-  const [search, setSearch] = useState('');
-  const [debtOnly, setDebtOnly] = usePersistentState('customers.debtOnly', false);
+  // Filters live in the URL and are remembered per user; the list is filtered here.
+  const lf = useFilterState('customers.list', FILTER_DEFAULTS);
+  const search = lf.search;
+  const debtOnly = lf.values.show === 'debt';
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const profileQuery = useApiQuery<CustomerProfile>(selectedCustomer ? `/sales/customers/${selectedCustomer.id}/profile` : null);
   const profile = profileQuery.data ?? null;
@@ -188,6 +193,8 @@ export default function CustomersPage() {
     },
   ];
 
+  const filterDefs: FilterDef[] = [{ key: 'show', kind: 'segmented', label: tc('show'), options: [{ value: 'debt', label: tc('withDebt'), count: customersWithDebt }] }];
+
   return (
     <div className="rd-page">
       <PageHeader
@@ -196,33 +203,22 @@ export default function CustomersPage() {
         actions={newButton}
       />
 
-      <SignalStrip label={tl('summary')}>
-        <Signal
-          tone="warning"
+      <StatCardGrid label={tl('summary')} count={2}>
+        <StatCard
           label={isRu ? 'Нам должны' : 'Bizga qarz'}
-          value={Object.keys(receivablesByCurrency).length > 0 ? <MultiCurrencyValue items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))} locale={locale} /> : '—'}
-          hint={tc('owesUsHint', { count: customersWithDebt })}
-          active={debtOnly}
-          onClick={() => setDebtOnly(!debtOnly)}
+          value={Object.keys(receivablesByCurrency).length > 0 ? <MultiCurrencyValue inherit items={Object.entries(receivablesByCurrency).map(([currency, amount]) => ({ currency, amount }))} locale={locale} /> : '—'}
+          secondary={tc('owesUsHint', { count: customersWithDebt })}
         />
-        <Signal tone="neutral" label={isRu ? 'Всего клиентов' : 'Jami mijozlar'} value={customers.length} />
-      </SignalStrip>
+        <StatCard label={isRu ? 'Всего клиентов' : 'Jami mijozlar'} value={customers.length} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={tIn('ism_telefon_yoki_e_pochta')} label={tl('search')} />
-          <ChipGroup
-            label={tc('show')}
-            options={[
-              { value: 'all', label: tl('all') },
-              { value: 'debt', label: tc('withDebt'), count: customersWithDebt },
-            ]}
-            value={debtOnly ? 'debt' : 'all'}
-            onChange={(v) => setDebtOnly(v === 'debt')}
-          />
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-      </div>
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={tIn('ism_telefon_yoki_e_pochta')}
+        resultCount={filtered.length}
+        columns={<ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {customersQuery.isError ? (
@@ -265,7 +261,7 @@ export default function CustomersPage() {
       )}
 
       {selectedCustomer && (
-        <Modal isOpen onClose={() => setSelectedCustomer(null)} title={selectedCustomer.name} size="xl">
+        <Modal icon={<UserRound size={20} />} isOpen onClose={() => setSelectedCustomer(null)} title={selectedCustomer.name} size="xl">
           {profileQuery.isError ? (
             <LoadError error={profileQuery.error} onRetry={() => void profileQuery.refetch()} retrying={profileQuery.isFetching} />
           ) : profileQuery.isPending || !profile ? (

@@ -24,9 +24,9 @@ export function ImpersonationBanner() {
         position: 'sticky',
         top: 0,
         zIndex: 50,
-        backgroundColor: '#7f1d1d', // Tailwind red-900
-        borderBottom: '2px solid #ef4444', // Tailwind red-500
-        color: '#ffffff',
+        backgroundColor: 'var(--color-error-700)',
+        borderBottom: '2px solid var(--color-error-600)',
+        color: 'var(--color-text-inverse)',
         padding: '8px 24px',
         display: 'flex',
         alignItems: 'center',
@@ -37,7 +37,7 @@ export function ImpersonationBanner() {
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-        <ShieldAlert size={18} style={{ color: '#f87171' }} />
+        <ShieldAlert size={18} aria-hidden />
         <span>
           {isRu
             ? `Вы находитесь в режиме техподдержки Superadmin: компания «${companyName}»`
@@ -49,17 +49,7 @@ export function ImpersonationBanner() {
         variant="secondary"
         size="sm"
         onClick={exitImpersonation}
-        style={{
-          backgroundColor: '#ffffff',
-          color: '#991b1b',
-          fontWeight: 600,
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          padding: '4px 12px',
-          borderRadius: '6px',
-          cursor: 'pointer',
-        }}
+        style={{ flexShrink: 0 }}
       >
         <ArrowLeft size={14} />
         {isRu ? 'Вернуться в Superadmin Panel' : 'Superadmin panelga qaytish'}

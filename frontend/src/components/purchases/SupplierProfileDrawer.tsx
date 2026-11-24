@@ -9,6 +9,8 @@ import { Badge } from '@/components/ui/Badge';
 import { formatCurrency, formatDate } from '@/lib/utils';
 import { DOCUMENT_STATUS_LABELS, statusLabel } from '@/lib/constants/statuses';
 import { PurchaseReceipt, PurchaseReturn } from '@shared/types';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
+import { Truck } from 'lucide-react';
 
 interface SupplierProfileData {
   supplier: {
@@ -68,7 +70,7 @@ export function SupplierProfileDrawer({
   if (!supplierId) return null;
 
   return (
-    <Modal
+    <Modal icon={<Truck size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       title={data?.supplier.name || (isRu ? 'Профиль поставщика' : 'Yetkazib beruvchi profili')}
@@ -92,68 +94,27 @@ export function SupplierProfileDrawer({
               // Per currency (ADR 0023): USD and UZS purchases are never added together.
               const perCurrency = (items: Array<{ currency: string; amount: number }>) =>
                 items.length === 0 ? '0' : items.map((t) => formatCurrency(t.amount, locale, t.currency)).join(' · ');
+              const debts = data.metrics.balancesByCurrency.filter((balance) => balance.supplierDebt !== 0);
               return (
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))',
-                    gap: 'var(--space-4)',
-                  }}
-                >
-                  <div
-                    style={{
-                      padding: 'var(--space-4)',
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      borderRadius: 'var(--radius-lg)',
-                      border: '1px solid var(--color-border)',
-                    }}
-                  >
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                      {isRu ? 'Общая сумма закупок' : 'Jami Xaridlar Summasi'}
-                    </div>
-                    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }} className="tabular-nums">
-                      {perCurrency(data.metrics.totalPurchasedByCurrency)}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      padding: 'var(--space-4)',
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      borderRadius: 'var(--radius-lg)',
-                      border: '1px solid var(--color-border)',
-                    }}
-                  >
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                      {isRu ? 'Оплаченная сумма' : 'To\'langan Summa'}
-                    </div>
-                    <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-success-700)' }} className="tabular-nums">
-                      {perCurrency(data.metrics.totalPaidByCurrency)}
-                    </div>
-                  </div>
-
-                  <div
-                    style={{
-                      padding: 'var(--space-4)',
-                      backgroundColor: 'var(--color-bg-tertiary)',
-                      borderRadius: 'var(--radius-lg)',
-                      border: '1px solid var(--color-border)',
-                    }}
-                  >
-                    <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-                      {isRu ? 'Наш долг' : 'Bizning Qarzimiz'}
-                    </div>
-                    {data.metrics.balancesByCurrency.filter((balance) => balance.supplierDebt !== 0).length > 0
-                      ? data.metrics.balancesByCurrency
-                          .filter((balance) => balance.supplierDebt !== 0)
-                          .map((balance) => (
-                            <div key={balance.currency} style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-bold)', color: balance.supplierDebt > 0 ? 'var(--color-danger-700)' : 'var(--color-info-700)' }} className="tabular-nums">
-                              {balance.currency}: {formatCurrency(balance.supplierDebt, locale, balance.currency)}
-                            </div>
-                          ))
-                      : <div style={{ fontSize: 'var(--text-xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)' }}>—</div>}
-                  </div>
-                </div>
+                <StatCardGrid label={isRu ? 'Сводка по поставщику' : 'Yetkazib beruvchi bo‘yicha'} count={3}>
+                  <StatCard label={isRu ? 'Общая сумма закупок' : 'Jami xaridlar summasi'} value={perCurrency(data.metrics.totalPurchasedByCurrency)} />
+                  <StatCard label={isRu ? 'Оплаченная сумма' : 'To‘langan summa'} value={perCurrency(data.metrics.totalPaidByCurrency)} />
+                  <StatCard
+                    label={isRu ? 'Наш долг' : 'Bizning qarzimiz'}
+                    value={
+                      debts.length > 0 ? (
+                        <span className="mcv">
+                          {debts.map((balance) => (
+                            <span key={balance.currency} className="mcv-line">
+                              {formatCurrency(balance.supplierDebt, locale, balance.currency)}
+                            </span>
+                          ))}
+                        </span>
+                      ) : null
+                    }
+                    secondary={debts.some((balance) => balance.supplierDebt < 0) ? (isRu ? 'Минус — наш аванс поставщику' : 'Minus — yetkazib beruvchiga avansimiz') : undefined}
+                  />
+                </StatCardGrid>
               );
             })()}
 
@@ -197,7 +158,7 @@ export function SupplierProfileDrawer({
                   transition: 'all 0.15s ease',
                 }}
               >
-                {isRu ? 'История закупок' : 'Xaridlar Tarixi'} ({data.receipts.length})
+                {isRu ? 'История закупок' : 'Xaridlar tarixi'} ({data.receipts.length})
               </button>
               <button
                 type="button"
@@ -258,7 +219,7 @@ export function SupplierProfileDrawer({
                   <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: '4px' }}>MFO: {data.supplier.mfo || '—'} {data.supplier.bankName ? `(${data.supplier.bankName})` : ''}</div>
                 </div>
                 <div style={{ padding: 'var(--space-4)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-tertiary)' }}>
-                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>{isRu ? 'Юридический адрес' : 'Yuridik Manzil'}</div>
+                  <div style={{ color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)', marginBottom: '4px' }}>{isRu ? 'Юридический адрес' : 'Yuridik manzil'}</div>
                   <strong style={{ fontSize: 'var(--text-base)', color: 'var(--color-text-primary)' }}>{data.supplier.address || '—'}</strong>
                 </div>
               </div>

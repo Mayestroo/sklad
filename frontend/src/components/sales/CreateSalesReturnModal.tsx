@@ -283,7 +283,7 @@ export function CreateSalesReturnModal({
       onSubmitShortcut={() => void handleSubmit('POSTED')}
       footer={
         <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', flexWrap: 'wrap', width: '100%' }}>
-          <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+          <Button data-dialog-cancel type="button" variant="outline" onClick={onClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="button" variant="secondary" onClick={() => void handleSubmit('DRAFT')} disabled={loading || fetchLoading || !!loadError}>

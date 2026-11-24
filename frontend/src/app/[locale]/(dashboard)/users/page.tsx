@@ -18,8 +18,7 @@ import { toast } from '@/context/ToastContext';
 import {
   UserPlus,
   AlertCircle,
-  Trash2,
-} from 'lucide-react';
+  Trash2, UserCog } from 'lucide-react';
 import { errorMessage } from '@/lib/utils';
 
 interface StaffUser {
@@ -285,12 +284,12 @@ export default function UsersPage() {
           {ROLES.map((r) => {
             const count = users.filter((u) => u.roles.includes(r)).length;
             return (
-              <li key={r} className="rd-signal rd-tone-neutral" style={{ minHeight: 0 }}>
-                <span className="rd-signal-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
+              <li key={r} className="stat-card">
+                <span className="stat-label" style={{ display: 'flex', justifyContent: 'space-between', width: '100%', gap: 8 }}>
                   <Badge variant={getRoleBadgeVariant(r)}>{roleName(r)}</Badge>
                   <span className="tabular-nums">{tu('people', { count })}</span>
                 </span>
-                <span className="rd-signal-hint" style={{ color: 'var(--color-text-secondary)', marginTop: 4 }}>{tu(`roleDesc_${r}`)}</span>
+                <span className="stat-secondary" style={{ marginTop: 4 }}>{tu(`roleDesc_${r}`)}</span>
                 {hasPermission('users:create') && (
                   <button type="button" className="rd-linkbtn" style={{ paddingLeft: 0, marginTop: 4 }} onClick={() => inviteAs(r)}>
                     {tu('inviteAs')}
@@ -318,7 +317,19 @@ export default function UsersPage() {
       </div>
 
       {/* Invite User Modal */}
-      <Modal isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md">
+      <Modal icon={<UserPlus size={20} />} description={isRu ? 'Сотрудник войдёт по этому email и временному паролю' : 'Xodim shu e-pochta va vaqtinchalik parol bilan kiradi'} isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md"
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setShowModal(false)}>
+            {tCommon('cancel')}
+          </Button>
+          <Button type="submit" form="page-form" variant="primary" disabled={createLoading}>
+            {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
 
         {createError && (
           <div style={{ padding: '10px', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', fontSize: 'var(--text-xs)', marginBottom: 'var(--space-3)' }}>
@@ -326,7 +337,7 @@ export default function UsersPage() {
           </div>
         )}
 
-        <form onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
+        <form id="page-form" onSubmit={handleCreateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div>
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
@@ -370,7 +381,7 @@ export default function UsersPage() {
 
           <div>
             <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
-              {isRu ? 'Временный пароль' : 'Vaqtinchalik Parol'}
+              {isRu ? 'Временный пароль' : 'Vaqtinchalik parol'}
             </label>
             <input
               type="password"
@@ -385,14 +396,14 @@ export default function UsersPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <Select
-              label={isRu ? 'Системная роль' : 'Tizim Roli'}
+              label={isRu ? 'Системная роль' : 'Tizim roli'}
               options={[...ROLES, 'viewer'].map((r) => ({ value: r, label: r === 'viewer' ? tu('role_viewer') : roleName(r), description: r === 'viewer' ? tu('roleDesc_viewer') : tu(`roleDesc_${r}`) }))}
               value={roleSlug}
               onChange={(val) => setRoleSlug(val)}
             />
 
             <Select
-              label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
+              label={isRu ? 'Предпочитаемый язык' : 'Afzal til'}
               options={[
                 { value: 'uz', label: 'O\'zbekcha (UZ)' },
                 { value: 'ru', label: 'Русский (RU)' },
@@ -401,21 +412,24 @@ export default function UsersPage() {
               onChange={(val) => setPreferredLanguage(val as typeof preferredLanguage)}
             />
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-            <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
-              {tCommon('cancel')}
-            </Button>
-            <Button type="submit" variant="primary" disabled={createLoading}>
-              {createLoading ? tCommon('loading') : (isRu ? 'Сохранить' : 'Biriktirish')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
 
       {/* Edit User Modal */}
       {editingUser && (
-      <Modal isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md">
+      <Modal icon={<UserCog size={20} />} isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md"
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setEditingUser(null)}>
+            {tCommon('cancel')}
+          </Button>
+          <Button type="submit" form="page-form-2" variant="primary" disabled={editLoading}>
+            {editLoading ? tCommon('loading') : (isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form-2') as HTMLFormElement | null)?.requestSubmit()}
+    >
 
         {editError && (
           <div style={{ padding: 'var(--space-3)', backgroundColor: 'var(--color-error-50)', color: 'var(--color-error-700)', borderRadius: 'var(--radius-md)', marginBottom: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-2)', fontSize: 'var(--text-sm)' }}>
@@ -424,7 +438,7 @@ export default function UsersPage() {
           </div>
         )}
 
-        <form onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <form id="page-form-2" onSubmit={handleUpdateUser} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <div>
               <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', marginBottom: '4px' }}>
@@ -464,14 +478,14 @@ export default function UsersPage() {
 
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-3)' }}>
             <Select
-              label={isRu ? 'Системная роль' : 'Tizim Roli'}
+              label={isRu ? 'Системная роль' : 'Tizim roli'}
               options={[...ROLES, 'viewer'].map((r) => ({ value: r, label: r === 'viewer' ? tu('role_viewer') : roleName(r), description: r === 'viewer' ? tu('roleDesc_viewer') : tu(`roleDesc_${r}`) }))}
               value={editRoleSlug}
               onChange={(val) => setEditRoleSlug(val)}
             />
 
             <Select
-              label={isRu ? 'Предпочитаемый язык' : 'Afzal Til'}
+              label={isRu ? 'Предпочитаемый язык' : 'Afzal til'}
               options={[
                 { value: 'uz', label: 'O\'zbekcha (UZ)' },
                 { value: 'ru', label: 'Русский (RU)' },
@@ -480,17 +494,8 @@ export default function UsersPage() {
               onChange={(val) => setEditPreferredLanguage(val as typeof editPreferredLanguage)}
             />
           </div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-4)' }}>
-            <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
-              {tCommon('cancel')}
-            </Button>
-            <Button type="submit" variant="primary" disabled={editLoading}>
-              {editLoading ? tCommon('loading') : (isRu ? 'Сохранить изменения' : 'O\'zgarishlarni saqlash')}
-            </Button>
-          </div>
-        </form>
-      </Modal>
+      </form>
+    </Modal>
       )}
 
       {/* Delete Confirmation Modal */}
@@ -541,11 +546,10 @@ export default function UsersPage() {
               <Button type="button" variant="secondary" onClick={() => setDeletingUser(null)} disabled={deleteLoading}>
                 {tCommon('cancel')}
               </Button>
-              <Button
+              <Button variant="danger"
                 type="button"
                 onClick={handleDeleteUser}
                 disabled={deleteLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', color: '#fff' }}
               >
                 {deleteLoading ? tCommon('loading') : (isRu ? 'Да, удалить' : 'Ha, o‘chirish')}
               </Button>

@@ -12,7 +12,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { toast } from '@/context/ToastContext';
-import { ArrowDownLeft, ArrowUpRight } from 'lucide-react';
+import { ArrowDownLeft, ArrowUpRight, Wallet } from 'lucide-react';
 import { isCashAccountCurrencyValid } from '@shared/types/cash-account-policy';
 
 interface CashAccount {
@@ -214,21 +214,45 @@ export function QuickPaymentModal({
   };
 
   return (
-    <Modal
+    <Modal icon={<Wallet size={20} />} description={isIncome ? (isRu ? 'Деньги поступят в кассу, долг контрагента уменьшится' : 'Pul kassaga tushadi, kontragent qarzi kamayadi') : isRu ? 'Деньги уйдут из кассы, наш долг контрагенту уменьшится' : 'Pul kassadan chiqadi, kontragentga qarzimiz kamayadi'}
       isOpen={isOpen}
       onClose={onClose}
       title={
         isIncome
           ? isRu
-            ? 'Принять оплату (Приход)'
-            : "To'lov qabul qilish (Kirim)"
+            ? 'Принять оплату'
+            : 'To‘lov qabul qilish'
           : isRu
-            ? 'Выплатить долг (Расход)'
-            : "Qarzni to'lash (Chiqim)"
+            ? 'Выплатить долг'
+            : 'Qarzni to‘lash'
       }
       size="md"
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={onClose} disabled={loading}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button
+            type="submit" form="quick-payment-modal-form"
+            disabled={loading || !settlementSide || !currency || !selectedAccount?.id}
+          >
+            {loading
+              ? isRu
+                ? 'Проведение...'
+                : "O'tkazilmoqda..."
+              : isIncome
+                ? isRu
+                  ? 'Принять оплату'
+                  : "To'lovni qabul qilish"
+                : isRu
+                  ? 'Выплатить'
+                  : "To'lov qilish"}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('quick-payment-modal-form') as HTMLFormElement | null)?.requestSubmit()}
     >
-      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <form id="quick-payment-modal-form" onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
         <Select
           label={isRu ? 'Сторона взаиморасчёта *' : 'Hisob-kitob tomoni *'}
           value={settlementSide}
@@ -363,32 +387,6 @@ export function QuickPaymentModal({
         </div>
 
         {/* Actions */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена' : 'Bekor qilish'}
-          </Button>
-          <Button
-            type="submit"
-            disabled={loading || !settlementSide || !currency || !selectedAccount?.id}
-            style={{
-              backgroundColor: isIncome ? 'var(--color-success-500)' : 'var(--color-error-500)',
-              borderColor: isIncome ? 'var(--color-success-500)' : 'var(--color-error-500)',
-              color: '#fff',
-            }}
-          >
-            {loading
-              ? isRu
-                ? 'Проведение...'
-                : "O'tkazilmoqda..."
-              : isIncome
-                ? isRu
-                  ? 'Принять оплату'
-                  : "To'lovni qabul qilish"
-                : isRu
-                  ? 'Выплатить'
-                  : "To'lov qilish"}
-          </Button>
-        </div>
       </form>
     </Modal>
   );

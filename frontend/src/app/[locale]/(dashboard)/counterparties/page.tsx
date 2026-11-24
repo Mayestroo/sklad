@@ -7,7 +7,8 @@ import { useLocale, useTranslations } from 'next-intl';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
 import { usePersistentState } from '@/lib/usePersistentState';
-import { ColumnChooser } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
@@ -19,7 +20,6 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
-import { Checkbox } from '@/components/ui/Checkbox';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import { MultiCurrencyValue } from '@/components/ui/MultiCurrencyValue';
@@ -30,17 +30,14 @@ import { AktSverkaDrawer } from '@/components/counterparties/AktSverkaDrawer';
 import {
   Users,
   Plus,
-  Search,
   Folder,
   FolderPlus,
   FolderOpen,
   Edit2,
   Trash2,
   Inbox,
-  Tag,
   ArrowDownLeft,
-  ArrowUpRight,
-} from 'lucide-react';
+  ArrowUpRight, FolderInput, UserRound } from 'lucide-react';
 
 /** GET /sales/orders/by-counterparty/:id */
 interface CustomerOrdersData {
@@ -128,6 +125,8 @@ const PRESET_COLORS = [
   '#64748b', // Slate
 ];
 
+const FILTER_DEFAULTS = { balance: '', type: '', hasDebt: '' };
+
 export default function CounterpartiesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
@@ -147,10 +146,11 @@ export default function CounterpartiesPage() {
   const [activeFolderId, setActiveFolderId] = useState<string>('all');
 
   // Filter state
-  const [search, setSearch] = useState('');
-  const [typeFilter, setTypeFilter] = useState('');
-  const [hasDebtOnly, setHasDebtOnly] = useState(false);
-  const [balanceFilter, setBalanceFilter] = useState<'all' | 'receivables' | 'payables' | 'settled'>('all');
+  // Filters live in the URL and are remembered per user; the folder is navigation and stays outside.
+  const lf = useFilterState('counterparties.list', FILTER_DEFAULTS);
+  const search = lf.debouncedSearch;
+  const { type: typeFilter, balance: balanceFilter } = lf.values;
+  const hasDebtOnly = lf.values.hasDebt === '1';
 
   // Typed filters apply 300 ms after the last change; the folder at once.
   const filterParams = useMemo(() => {
@@ -158,7 +158,7 @@ export default function CounterpartiesPage() {
     if (search) query.append('search', search);
     if (typeFilter) query.append('type', typeFilter);
     if (hasDebtOnly) query.append('hasDebt', 'true');
-    if (balanceFilter && balanceFilter !== 'all') query.append('balanceFilter', balanceFilter);
+    if (balanceFilter) query.append('balanceFilter', balanceFilter);
     return query.toString();
   }, [search, typeFilter, hasDebtOnly, balanceFilter]);
   const debouncedFilterParams = useDebouncedValue(filterParams, 300);
@@ -482,6 +482,30 @@ export default function CounterpartiesPage() {
     setPaymentCurrency(undefined);
   };
 
+  const filterDefs: FilterDef[] = [
+    {
+      key: 'balance',
+      kind: 'segmented',
+      label: isRu ? 'Расчёты' : 'Hisob-kitob',
+      options: [
+        { value: 'receivables', label: isRu ? 'Нам должны' : 'Haqdorlar', count: summary?.receivables.count },
+        { value: 'payables', label: isRu ? 'Наш долг' : 'Qarzdorlar', count: summary?.payables.count },
+        { value: 'settled', label: isRu ? 'Расчет окончен' : 'Hisob-kitob yopilgan' },
+      ],
+    },
+    {
+      key: 'type',
+      kind: 'select',
+      label: isRu ? 'Тип' : 'Turi',
+      options: [
+        { value: 'CUSTOMER', label: isRu ? 'Только клиенты' : 'Faqat mijozlar' },
+        { value: 'SUPPLIER', label: isRu ? 'Только поставщики' : 'Faqat yetkazib beruvchilar' },
+        { value: 'BOTH', label: isRu ? 'Клиент и Поставщик' : 'Mijoz va yetkazib beruvchi' },
+      ],
+    },
+    { key: 'hasDebt', kind: 'toggle', label: isRu ? 'Только с долгом' : 'Faqat qarzi borlar' },
+  ];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* Page Header */}
@@ -497,7 +521,6 @@ export default function CounterpartiesPage() {
               <FolderPlus size={16} aria-hidden /> {isRu ? 'Создать папку' : 'Papka yaratish'}
             </Button>
           )}
-          <ColumnChooser columns={cpColumns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={cpHidden} onChange={setCpHidden} />
           <Button onClick={handleOpenCreateModal} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <Plus size={16} />
             {isRu ? 'Новый контрагент' : 'Yangi kontragent'}
@@ -672,295 +695,28 @@ export default function CounterpartiesPage() {
 
         {/* Right Main Panel: KPIs, Filters, Table */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', minWidth: 0 }}>
-          {/* KPI Cards */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 170px), 1fr))', gap: 'var(--space-3)' }}>
-            {/* Customers */}
-            <div
-              style={{
-                position: 'relative',
-                padding: '18px 20px 16px',
-                borderRadius: 'var(--radius-lg, 10px)',
-                background: 'var(--color-bg-card, var(--color-bg-surface))',
-                border: '1.5px solid var(--color-border)',
-                overflow: 'hidden',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                background: 'linear-gradient(90deg, #3b82f6, #60a5fa)',
-                borderRadius: '10px 10px 0 0',
-              }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'Клиенты' : 'Mijozlar'}
-                </span>
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(59,130,246,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Users size={15} style={{ color: 'var(--color-info-700)' }} />
-                </div>
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: 'var(--color-info-700)' }}>
-                {summary?.total_customers ?? totalCustomers}
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 6 }}>
-                {isRu ? 'активных клиентов' : 'ta faol mijoz'}
-              </div>
-            </div>
+          <StatCardGrid label={isRu ? 'Сводка' : 'Qisqacha'} count={4}>
+            <StatCard label={isRu ? 'Клиенты' : 'Mijozlar'} value={summary?.total_customers ?? totalCustomers} secondary={isRu ? 'активных клиентов' : 'ta faol mijoz'} />
+            <StatCard label={isRu ? 'Поставщики' : 'Yetkazib beruvchilar'} value={summary?.total_suppliers ?? totalSuppliers} secondary={isRu ? 'активных поставщиков' : 'ta yetkazib beruvchi'} />
+            <StatCard
+              label={isRu ? 'Нам должны' : 'Bizga qarzdorlar'}
+              value={<MultiCurrencyValue inherit items={summary?.receivables.byCurrency} locale={locale} />}
+              secondary={isRu ? `Клиентов: ${summary?.receivables.count ?? 0}` : `${summary?.receivables.count ?? 0} ta mijoz`}
+            />
+            <StatCard
+              label={isRu ? 'Наш долг' : 'Bizning qarzimiz'}
+              value={<MultiCurrencyValue inherit items={summary?.payables.byCurrency} locale={locale} />}
+              secondary={isRu ? `Поставщиков: ${summary?.payables.count ?? 0}` : `${summary?.payables.count ?? 0} ta yetkazib beruvchi`}
+            />
+          </StatCardGrid>
 
-            {/* Suppliers */}
-            <div
-              style={{
-                position: 'relative',
-                padding: '18px 20px 16px',
-                borderRadius: 'var(--radius-lg, 10px)',
-                background: 'var(--color-bg-card, var(--color-bg-surface))',
-                border: '1.5px solid var(--color-border)',
-                overflow: 'hidden',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                background: 'linear-gradient(90deg, #f59e0b, #fbbf24)',
-                borderRadius: '10px 10px 0 0',
-              }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'Поставщики' : 'Yetkazib beruvchilar'}
-                </span>
-                <div style={{ width: 30, height: 30, borderRadius: 8, background: 'rgba(245,158,11,0.12)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                  <Tag size={15} style={{ color: 'var(--color-warning-700)' }} />
-                </div>
-              </div>
-              <div style={{ fontSize: 32, fontWeight: 800, lineHeight: 1, color: 'var(--color-warning-700)' }}>
-                {summary?.total_suppliers ?? totalSuppliers}
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-text-tertiary)', marginTop: 6 }}>
-                {isRu ? 'активных поставщиков' : 'ta yetkazib beruvchi'}
-              </div>
-            </div>
-
-            {/* Receivables */}
-            <div
-              style={{
-                position: 'relative',
-                padding: '18px 20px 16px',
-                borderRadius: 'var(--radius-lg, 10px)',
-                background: 'var(--color-bg-card, var(--color-bg-surface))',
-                border: '1.5px solid var(--color-border)',
-                overflow: 'hidden',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                background: 'linear-gradient(90deg, #10b981, #34d399)',
-                borderRadius: '10px 10px 0 0',
-              }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'Нам должны' : 'Bizga qarzdorlar'}
-                </span>
-                <span style={{
-                  fontSize: '11px', fontWeight: 700,
-                  background: 'rgba(16,185,129,0.15)',
-                  color: 'var(--color-success-700)',
-                  padding: '3px 9px', borderRadius: 20,
-                  border: '1px solid rgba(16,185,129,0.25)',
-                }}>
-                  {summary?.receivables.count ?? 0} {isRu ? 'кл.' : 'ta'}
-                </span>
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-success-700)', fontWeight: 600, marginBottom: 2 }}>{isRu ? '+ Дебиторка' : '+ Haqdorlik'}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-success-700)', lineHeight: 1.2, wordBreak: 'break-all' }}>
-                <MultiCurrencyValue
-                  items={summary?.receivables.byCurrency}
-                  locale={locale}
-                  color="var(--color-success-700)"
-                />
-              </div>
-            </div>
-
-            {/* Payables */}
-            <div
-              style={{
-                position: 'relative',
-                padding: '18px 20px 16px',
-                borderRadius: 'var(--radius-lg, 10px)',
-                background: 'var(--color-bg-card, var(--color-bg-surface))',
-                border: '1.5px solid var(--color-border)',
-                overflow: 'hidden',
-                boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
-              }}
-            >
-              <div style={{
-                position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                background: 'linear-gradient(90deg, #ef4444, #f87171)',
-                borderRadius: '10px 10px 0 0',
-              }} />
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-                <span style={{ fontSize: '11px', fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'var(--color-text-secondary)' }}>
-                  {isRu ? 'Наш долг' : 'Bizning qarzimiz'}
-                </span>
-                <span style={{
-                  fontSize: '11px', fontWeight: 700,
-                  background: 'rgba(239,68,68,0.12)',
-                  color: 'var(--color-error-700)',
-                  padding: '3px 9px', borderRadius: 20,
-                  border: '1px solid rgba(239,68,68,0.22)',
-                }}>
-                  {summary?.payables.count ?? 0} {isRu ? 'пост.' : 'ta'}
-                </span>
-              </div>
-              <div style={{ fontSize: '11px', color: 'var(--color-error-700)', fontWeight: 600, marginBottom: 2 }}>{isRu ? '− Кредиторка' : '− Qarzdorlik'}</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: 'var(--color-error-700)', lineHeight: 1.2, wordBreak: 'break-all' }}>
-                <MultiCurrencyValue
-                  items={summary?.payables.byCurrency}
-                  locale={locale}
-                  color="var(--color-error-700)"
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Quick Balance Filter — Segmented Pill Bar */}
-          <div style={{
-            display: 'flex',
-            gap: 4,
-            background: 'var(--color-bg-card, var(--color-bg-secondary))',
-            border: '1px solid var(--color-border)',
-            borderRadius: 'var(--radius-lg, 10px)',
-            padding: 4,
-            width: 'fit-content',
-            maxWidth: '100%',
-            overflowX: 'auto',
-          }}>
-            {[
-              {
-                id: 'all',
-                label: isRu ? 'Все' : 'Barchasi',
-                activeBg: 'rgba(59, 130, 246, 0.20)',
-                activeBorder: 'rgba(59, 130, 246, 0.50)',
-                activeColor: 'var(--color-info-700)',
-                color: null,
-              },
-              {
-                id: 'receivables',
-                label: isRu ? 'Нам должны' : 'Haqdorlar',
-                count: summary?.receivables.count,
-                activeBg: 'rgba(16, 185, 129, 0.22)',
-                activeBorder: 'rgba(16, 185, 129, 0.55)',
-                activeColor: 'var(--color-success-700)',
-                color: 'var(--color-success-700)',
-                dot: 'var(--color-success-500)',
-              },
-              {
-                id: 'payables',
-                label: isRu ? 'Наш долг' : 'Qarzdorlar',
-                count: summary?.payables.count,
-                activeBg: 'rgba(239, 68, 68, 0.22)',
-                activeBorder: 'rgba(239, 68, 68, 0.55)',
-                activeColor: 'var(--color-error-700)',
-                color: 'var(--color-error-700)',
-                dot: 'var(--color-error-500)',
-              },
-              {
-                id: 'settled',
-                label: isRu ? 'Расчет окончен' : 'Hisob-kitob',
-                activeBg: 'rgba(148, 163, 184, 0.22)',
-                activeBorder: 'rgba(148, 163, 184, 0.45)',
-                activeColor: 'var(--color-text-primary)',
-                color: null,
-              },
-            ].map((tab) => {
-              const active = balanceFilter === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  id={`balance-filter-${tab.id}`}
-                  onClick={() => setBalanceFilter(tab.id as typeof balanceFilter)}
-                  style={{
-                    padding: '7px 16px',
-                    borderRadius: 'var(--radius-md, 7px)',
-                    border: active ? `1px solid ${tab.activeBorder}` : '1px solid transparent',
-                    background: active ? tab.activeBg : 'transparent',
-                    color: active ? tab.activeColor : 'var(--color-text-secondary)',
-                    fontWeight: active ? 700 : 500,
-                    fontSize: '13px',
-                    cursor: 'pointer',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    transition: 'all 0.15s ease',
-                    whiteSpace: 'nowrap',
-                    boxShadow: active ? '0 2px 8px rgba(0,0,0,0.15)' : 'none',
-                  }}
-                >
-                  {tab.dot && (
-                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: tab.dot, flexShrink: 0 }} />
-                  )}
-                  <span>{tab.label}</span>
-                  {tab.count !== undefined && tab.count > 0 && (
-                    <span
-                      style={{
-                        fontSize: '11px',
-                        padding: '1px 7px',
-                        borderRadius: '20px',
-                        background: active ? `color-mix(in srgb, ${tab.dot} 20%, transparent)` : 'var(--color-bg-subtle)',
-                        color: active ? tab.activeColor : 'var(--color-text-secondary)',
-                        fontWeight: 700,
-                        border: active ? `1px solid color-mix(in srgb, ${tab.dot} 40%, transparent)` : '1px solid var(--color-border)',
-                      }}
-                    >
-                      {tab.count}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-
-          {/* Filter Toolbar */}
-          <Card style={{ padding: 'var(--space-3) var(--space-4)' }}>
-            <div style={{ display: 'flex', gap: 'var(--space-3)', flexWrap: 'wrap', alignItems: 'center' }}>
-              <div style={{ flex: '1 1 200px', position: 'relative' }}>
-                <Search size={15} style={{ position: 'absolute', left: 10, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)' }} />
-                <input
-                  placeholder={isRu ? 'Наименование, ИНН, телефон...' : 'Nomi, STIR, telefon...'}
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  style={{
-                    width: '100%',
-                    padding: '8px 12px 8px 34px',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: 'var(--radius-md)',
-                    background: 'var(--color-bg-input)',
-                    color: 'var(--color-text-primary)',
-                    fontSize: 'var(--text-sm)',
-                    boxSizing: 'border-box',
-                  }}
-                />
-              </div>
-
-              <Select
-                value={typeFilter}
-                onChange={(val) => setTypeFilter(val)}
-                options={[
-                  { value: '', label: isRu ? 'Все типы' : 'Barcha turlar' },
-                  { value: 'CUSTOMER', label: isRu ? 'Только клиенты' : 'Faqat mijozlar' },
-                  { value: 'SUPPLIER', label: isRu ? 'Только поставщики' : 'Faqat yetkazib beruvchilar' },
-                  { value: 'BOTH', label: isRu ? 'Клиент и Поставщик' : 'Mijoz va yetkazib beruvchi' },
-                ]}
-              />
-
-              <Checkbox
-                checked={hasDebtOnly}
-                onChange={(e) => setHasDebtOnly(e.target.checked)}
-                label={isRu ? 'Только с долгом' : 'Faqat qarzi borlar'}
-                size="sm"
-              />
-            </div>
-          </Card>
+          <FilterBar
+            state={lf}
+            defs={filterDefs}
+            searchPlaceholder={isRu ? 'Наименование, ИНН, телефон' : 'Nomi, STIR yoki telefon'}
+            resultCount={listQuery.isPending ? null : items.length}
+            columns={<ColumnChooser columns={cpColumns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={cpHidden} onChange={setCpHidden} />}
+          />
 
           {/* Counterparties table: biggest balance first, one money action per side, the rest in ⋯ */}
           <div className="rd-table-card">
@@ -1006,12 +762,23 @@ export default function CounterpartiesPage() {
 
       {/* Create / Edit Folder Modal */}
       {isFolderModalOpen && (
-        <Modal
+        <Modal icon={<FolderPlus size={20} />} description={isRu ? 'Для группировки контрагентов' : 'Kontragentlarni guruhlarga ajratish uchun'}
           isOpen={true}
           onClose={() => setIsFolderModalOpen(false)}
           title={folderModalMode === 'create' ? (isRu ? 'Создание папки' : 'Yangi papka yaratish') : (isRu ? 'Редактирование папки' : 'Papkani tahrirlash')}
-        >
-          <form onSubmit={handleSaveFolder} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setIsFolderModalOpen(false)} disabled={folderSubmitting}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="page-form" disabled={folderSubmitting}>
+            {folderSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
+    >
+          <form id="page-form" onSubmit={handleSaveFolder} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {folderError && (
               <div style={{ padding: '10px 14px', borderRadius: 'var(--radius-md)', backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--color-error-700)', fontSize: 'var(--text-sm)' }}>
                 {folderError}
@@ -1019,7 +786,7 @@ export default function CounterpartiesPage() {
             )}
 
             <Input
-              label={isRu ? 'Название папки *' : 'Papka Nomi *'}
+              label={isRu ? 'Название папки *' : 'Papka nomi *'}
               value={folderName}
               onChange={(e) => setFolderName(e.target.value)}
               placeholder={isRu ? 'Например: VIP Клиенты' : 'Mas: VIP Mijozlar'}
@@ -1028,7 +795,7 @@ export default function CounterpartiesPage() {
 
             <div>
               <label style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', display: 'block', marginBottom: 8 }}>
-                {isRu ? 'Цветовая метка' : 'Papka Rangi'}
+                {isRu ? 'Цветовая метка' : 'Papka rangi'}
               </label>
               <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                 {PRESET_COLORS.map((c) => (
@@ -1048,55 +815,43 @@ export default function CounterpartiesPage() {
                 ))}
               </div>
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-              <Button type="button" variant="secondary" onClick={() => setIsFolderModalOpen(false)} disabled={folderSubmitting}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button type="submit" disabled={folderSubmitting}>
-                {folderSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Сохранить' : 'Saqlash')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      </form>
+    </Modal>
       )}
 
       {/* Delete Folder Modal */}
       {deleteFolderId && (
-        <Modal isOpen={true} onClose={() => setDeleteFolderId(null)} title={isRu ? 'Удаление папки' : 'Papkani o\'chirish'}>
+        <Modal icon={<Trash2 size={20} />} tone="error" isOpen={true} onClose={() => setDeleteFolderId(null)} title={isRu ? 'Удаление папки' : 'Papkani o\'chirish'}
+          footer={
+            <>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeleteFolderId(null)} disabled={deleteSubmitting}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="danger" onClick={handleDeleteFolder} disabled={deleteSubmitting}>
+                {deleteSubmitting ? (isRu ? 'Удаление...' : 'O\'chirilmoqda...') : (isRu ? 'Удалить папку' : 'Papkani o\'chirish')}
+              </Button>
+            </>
+          }
+        >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
               {isRu
                 ? 'Вы действительно хотите удалить эту папку? Контрагенты внутри нее НЕ будут удалены, а перейдут в раздел "Без папки".'
                 : 'Ushbu papkani o\'chirishni tasdiqlaysizmi? Ichidagi kontragentlar o\'chib ketmaydi, "Papkada bo\'lmaganlar" bo\'limiga o\'tadi.'}
             </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button variant="secondary" onClick={() => setDeleteFolderId(null)} disabled={deleteSubmitting}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="danger" onClick={handleDeleteFolder} disabled={deleteSubmitting}>
-                {deleteSubmitting ? (isRu ? 'Удаление...' : 'O\'chirilmoqda...') : (isRu ? 'Удалить папку' : 'Papkani o\'chirish')}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
 
       {/* Delete Counterparty Modal */}
       {deletingCounterparty && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           onClose={() => setDeletingCounterparty(null)}
           title={isRu ? 'Удаление контрагента' : 'Kontragentni o\'chirish'}
-        >
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-              {isRu
-                ? `Вы действительно хотите удалить контрагента "${deletingCounterparty.name}"? Если с этим контрагентом связаны документы или операции, система отклонит удаление.`
-                : `Haqiqatan ham "${deletingCounterparty.name}" kontragentini o'chirmoqchimisiz? Agar ushbu kontragent bo'yicha operatsiyalar yoki hujjatlar mavjud bo'lsa, tizim o'chirishga ruxsat bermaydi.`}
-            </p>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)' }}>
-              <Button
+          footer={
+            <>
+              <Button data-dialog-cancel
                 variant="secondary"
                 onClick={() => setDeletingCounterparty(null)}
                 disabled={deleteCounterpartyLoading}
@@ -1112,15 +867,35 @@ export default function CounterpartiesPage() {
                   ? (isRu ? 'Удаление...' : 'O\'chirilmoqda...')
                   : (isRu ? 'Удалить' : 'O\'chirish')}
               </Button>
-            </div>
+            </>
+          }
+        >
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+              {isRu
+                ? `Вы действительно хотите удалить контрагента "${deletingCounterparty.name}"? Если с этим контрагентом связаны документы или операции, система отклонит удаление.`
+                : `Haqiqatan ham "${deletingCounterparty.name}" kontragentini o'chirmoqchimisiz? Agar ushbu kontragent bo'yicha operatsiyalar yoki hujjatlar mavjud bo'lsa, tizim o'chirishga ruxsat bermaydi.`}
+            </p>
           </div>
         </Modal>
       )}
 
       {/* Move Counterparty Modal */}
       {moveItem && (
-        <Modal isOpen={true} onClose={() => setMoveItem(null)} title={`${isRu ? 'Переместить:' : 'Papkaga ko\'chirish:'} ${moveItem.name}`}>
-          <form onSubmit={handleMoveCounterparty} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+        <Modal icon={<FolderInput size={20} />} isOpen={true} onClose={() => setMoveItem(null)} title={`${isRu ? 'Переместить:' : 'Papkaga ko\'chirish:'} ${moveItem.name}`}
+      footer={
+        <>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setMoveItem(null)} disabled={moveSubmitting}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
+          </Button>
+          <Button type="submit" form="page-form-2" disabled={moveSubmitting}>
+            {moveSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Переместить' : 'Ko‘chirish')}
+          </Button>
+        </>
+      }
+      onSubmitShortcut={() => (document.getElementById('page-form-2') as HTMLFormElement | null)?.requestSubmit()}
+    >
+          <form id="page-form-2" onSubmit={handleMoveCounterparty} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <Select
               label={isRu ? 'Выберите целевую папку' : 'Maqsaddagi papkani tanlang'}
               value={targetFolderId}
@@ -1130,22 +905,13 @@ export default function CounterpartiesPage() {
                 ...folders.map((f) => ({ value: f.id, label: f.name })),
               ]}
             />
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', marginTop: 'var(--space-2)' }}>
-              <Button type="button" variant="secondary" onClick={() => setMoveItem(null)} disabled={moveSubmitting}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button type="submit" disabled={moveSubmitting}>
-                {moveSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Ko\'chirish' : 'Переместить')}
-              </Button>
-            </div>
-          </form>
-        </Modal>
+      </form>
+    </Modal>
       )}
 
       {/* Detail Modal */}
       {detailItem && (
-        <Modal isOpen={true} onClose={() => setDetailItem(null)} title={`${isRu ? 'Профиль:' : 'Kontragent Profili:'} ${detailItem.name}`} size="lg">
+        <Modal icon={<UserRound size={20} />} isOpen={true} onClose={() => setDetailItem(null)} title={`${isRu ? 'Профиль:' : 'Kontragent profili:'} ${detailItem.name}`} size="lg">
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 160px), 1fr))', gap: 'var(--space-4)', padding: 'var(--space-4)', borderRadius: 'var(--radius-lg)', backgroundColor: 'var(--color-bg-subtle)' }}>
               <div>
@@ -1208,7 +974,7 @@ export default function CounterpartiesPage() {
             {(detailItem.bankName || detailItem.bankAccount || detailItem.mfo) && (
               <div style={{ padding: 'var(--space-3) var(--space-4)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
                 <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-                  {isRu ? 'Банковские реквизиты' : 'Bank Rekvizitlari'}
+                  {isRu ? 'Банковские реквизиты' : 'Bank rekvizitlari'}
                 </div>
                 <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
                   <div><strong>{isRu ? 'Банк:' : 'Bank:'}</strong> {detailItem.bankName || '—'}</div>

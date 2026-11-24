@@ -15,6 +15,7 @@ import { PurchaseReceipt } from '@shared/types';
 import { formatCurrency, formatUnitCost, errorMessage, type LocalizedName } from '@/lib/utils';
 import { localIsoDate } from '@/lib/date-range';
 import { toast } from '@/context/ToastContext';
+import { Undo2 } from 'lucide-react';
 
 interface CreateReturnModalProps {
   isOpen: boolean;
@@ -166,7 +167,7 @@ export function CreateReturnModal({
     setTyped((prev) => ({ ...prev, qty: Object.fromEntries(returnItems.map((item, i) => [i, item.maxQty])) }));
 
   return (
-    <Modal
+    <Modal icon={<Undo2 size={20} />}
       isOpen={isOpen}
       onClose={onClose}
       size="lg"
@@ -179,7 +180,7 @@ export function CreateReturnModal({
             <strong className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>{formatCurrency(returnTotal, locale, receipt.currency)}</strong>
           </span>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <Button variant="outline" onClick={onClose} disabled={loading}>
+            <Button data-dialog-cancel variant="outline" onClick={onClose} disabled={loading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button variant="secondary" onClick={() => void handleSubmit('DRAFT')} disabled={loading}>

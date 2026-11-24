@@ -725,14 +725,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               variant="secondary"
               onClick={() => setIsPayOpen(true)}
-              style={{
-                backgroundColor: 'var(--color-success-50)',
-                color: 'var(--color-success-700)',
-                border: '1px solid var(--color-success-200)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-              }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <CreditCard size={16} /> {isRu ? 'Принять оплату' : 'To‘lov qabul qilish'}
             </Button>
@@ -753,15 +746,15 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               <Button
                 onClick={() => handleTransition('APPROVE')}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <CheckCircle2 size={16} /> {isRu ? 'Согласовать' : 'Tasdiqlash'}
               </Button>
               <Button
-                variant="secondary"
+                variant="danger-outline"
                 onClick={() => handleTransition('REJECT')}
                 disabled={loading}
-                style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
+                style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               >
                 <XCircle size={16} /> {isRu ? 'Отклонить' : 'Rad etish'}
               </Button>
@@ -783,7 +776,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => handleStatusUpdate('ACCEPTED')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-primary-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <CheckCircle2 size={16} /> {isRu ? 'Принять на складе' : 'Omborga qabul qilish'}
             </Button>
@@ -793,7 +786,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => handleStatusUpdate('PROCESSING')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-warning-500)', color: '#fff' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <PackageCheck size={16} /> {isRu ? 'В сборку' : 'Yig‘uvga olish'}
             </Button>
@@ -803,7 +796,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => handleStatusUpdate('READY_FOR_SHIPMENT')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <CheckCircle2 size={16} /> {isRu ? 'Готов к отгрузке' : 'Jo‘natishga tayyor'}
             </Button>
@@ -813,7 +806,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={() => setIsDispatchOpen(true)}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Truck size={16} /> {isRu ? (orderStatus === 'PARTIALLY_SHIPPED' ? 'Отгрузить еще' : 'Отгрузить') : (orderStatus === 'PARTIALLY_SHIPPED' ? 'Keyingi chiqim (jo‘natish)' : 'Ombordan chiqim (jo‘natish)')}
             </Button>
@@ -837,7 +830,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
               variant="secondary"
               onClick={() => setIsDeliveryNoteOpen(true)}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-success-700)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <Printer size={16} /> {isRu ? 'Накладная' : 'Yuk xati'}
             </Button>
@@ -847,7 +840,7 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
             <Button
               onClick={handleComplete}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', backgroundColor: 'var(--color-success-600)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <CheckCheck size={16} /> {isRu ? 'Завершить' : 'Yakunlash'}
             </Button>
@@ -855,10 +848,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
           {orderStatus !== 'COMPLETED' && orderStatus !== 'CANCELLED' && orderStatus !== 'SHIPPED' && (
             <Button
-              variant="secondary"
+              variant="danger-outline"
               onClick={() => handleTransition('CANCEL')}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
             >
               <XCircle size={16} /> {isRu ? 'Отменить' : 'Bekor qilish'}
             </Button>
@@ -877,10 +870,10 @@ export function SalesOrderForm({ initialData, mode }: SalesOrderFormProps) {
 
           {mode === 'edit' && (orderStatus === 'NEW' || orderStatus === 'PENDING_APPROVAL' || orderStatus === 'CANCELLED') && (
             <Button
-              variant="ghost"
+              variant="danger-ghost"
               onClick={handleDeleteOrder}
               disabled={loading}
-              style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--color-error-700)' }}
+              style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
               title={isRu ? 'Удалить заказ' : "Buyurtmani o'chirish"}
             >
               <Trash2 size={16} /> {isRu ? 'Удалить' : "O'chirish"}

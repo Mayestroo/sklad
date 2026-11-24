@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
 import { useLocale, useTranslations } from 'next-intl';
-import { ChipGroup } from '@/components/ui/list/ListKit';
+import { SegmentedFilter } from '@/components/ui/filters';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
 import { formatDate, formatDateTime, errorMessage } from '@/lib/utils';
@@ -97,10 +97,11 @@ export default function SuperAdminTicketsPage() {
       ) : (
         <div className="tk-inbox">
           <div className="tk-list">
-            <ChipGroup
+            <SegmentedFilter
+              name="view"
               label={tt('show')}
               value={view}
-              onChange={(v) => setView((v || 'all') as 'waiting' | 'all')}
+              onChange={(v: string) => setView((v || 'all') as 'waiting' | 'all')}
               options={[
                 { value: 'waiting', label: tt('waiting'), count: waitingCount },
                 { value: 'all', label: tt('all'), count: tickets.length },

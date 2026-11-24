@@ -46,7 +46,7 @@ describe('Analytics page', () => {
       ]),
     );
 
-    fireEvent.click(screen.getByRole('button', { name: 'Yillik' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Yillik' }));
     await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(11));
     expect(calledEndpoints()).toContain('/analytics/kpi-summary?range=year');
     expect(calledEndpoints().filter((e) => e === '/analytics/financial-ratios')).toHaveLength(1);

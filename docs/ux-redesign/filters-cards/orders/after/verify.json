@@ -1,0 +1,324 @@
+[
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "toolbar present",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "stat cards (4) not clickable",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "\"/\" focuses search",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "search → URL q + chip",
+  "ok": true,
+  "note": "?q=a"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "search clear button",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "dropdown opens by key, Esc closes, focus returns",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "dropdown shows value",
+  "ok": true,
+  "note": "Bosqich: Yangi"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "period preset",
+  "ok": true,
+  "note": "?status=NEW&period=this_month"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "custom range on calendar",
+  "ok": true,
+  "note": "?status=NEW&period=2026-11-01_2026-11-10"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "calendar arrow keys + Esc",
+  "ok": true,
+  "note": "2026-11-02"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "result count shown",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "reload keeps view",
+  "ok": true,
+  "note": "?status=NEW&period=2026-11-01_2026-11-10"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "Back keeps view",
+  "ok": true,
+  "note": "?status=NEW&period=2026-11-01_2026-11-10"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "fresh visit restores remembered view",
+  "ok": true,
+  "note": "?status=NEW&period=2026-11-01_2026-11-10"
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "clear all",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 1440,
+  "step": "no page errors",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "no horizontal page scroll",
+  "ok": true,
+  "note": "0"
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "search visible",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "desktop filters hidden",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "sheet opens",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "apply → badge + chip",
+  "ok": true,
+  "note": "?status=NEW"
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "Esc closes sheet",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "uz",
+  "width": 390,
+  "step": "sheet clear + apply",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "toolbar present",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "stat cards (4) not clickable",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "\"/\" focuses search",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "search → URL q + chip",
+  "ok": true,
+  "note": "?q=a"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "search clear button",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "dropdown opens by key, Esc closes, focus returns",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "dropdown shows value",
+  "ok": true,
+  "note": "Этап: Новый"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "period preset",
+  "ok": true,
+  "note": "?status=NEW&period=this_month"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "custom range on calendar",
+  "ok": true,
+  "note": "?status=NEW&period=2026-11-01_2026-11-10"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "calendar arrow keys + Esc",
+  "ok": true,
+  "note": "2026-11-02"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "result count shown",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "reload keeps view",
+  "ok": true,
+  "note": "?status=NEW&period=2026-11-01_2026-11-10"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "Back keeps view",
+  "ok": true,
+  "note": "?status=NEW&period=2026-11-01_2026-11-10"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "fresh visit restores remembered view",
+  "ok": true,
+  "note": "?status=NEW&period=2026-11-01_2026-11-10"
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "clear all",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 1440,
+  "step": "no page errors",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "no horizontal page scroll",
+  "ok": true,
+  "note": "0"
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "search visible",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "desktop filters hidden",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "sheet opens",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "apply → badge + chip",
+  "ok": true,
+  "note": "?status=NEW"
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "Esc closes sheet",
+  "ok": true,
+  "note": ""
+ },
+ {
+  "locale": "ru",
+  "width": 390,
+  "step": "sheet clear + apply",
+  "ok": true,
+  "note": ""
+ }
+]

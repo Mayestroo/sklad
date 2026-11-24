@@ -10,13 +10,11 @@ import { formatCurrency, formatDate, errorMessage, getLocalizedName } from '@/li
 import { Button, buttonStyle } from '@/components/ui/Button';
 import { Modal } from '@/components/ui/Modal';
 import { Drawer } from '@/components/ui/Drawer';
-import { Select, SelectOption } from '@/components/ui/Select';
 import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { PageHeader } from '@/components/ui/PageHeader';
-import { SearchField } from '@/components/ui/SearchField';
 import { ActionsMenu } from '@/components/production/ActionsMenu';
-import { ClipboardList, Plus, CreditCard, ExternalLink, PackageCheck } from 'lucide-react';
+import { ClipboardList, Plus, CreditCard, ExternalLink, PackageCheck, FileText, Trash2 } from 'lucide-react';
 import { ORDER_STATUS_LABELS } from '@/components/sales/SalesOrderForm';
 import { PaySalesOrderModal } from '@/components/sales/PaySalesOrderModal';
 import { OrderPickListModal } from '@/components/sales/OrderPickListModal';
@@ -25,25 +23,12 @@ import { invalidateApiCache } from '@/lib/cache';
 import { apiFetch } from '@/lib/api';
 import { useConfirm } from '@/context/ConfirmContext';
 import { toast } from '@/context/ToastContext';
-import { useDebouncedValue } from '@/lib/useDebouncedValue';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { totalsByCurrency } from '@/lib/currency-totals';
 import { localIsoDate } from '@/lib/date-range';
-import {
-  ActiveFilters,
-  ALL_TIME,
-  ChipGroup,
-  ColumnChooser,
-  CurrencyTotals,
-  MoreFiltersButton,
-  PeriodFilter,
-  resolvePeriod,
-  Signal,
-  SignalStrip,
-  useListFilters,
-  type ActiveFilter,
-  type PeriodValue,
-} from '@/components/ui/list/ListKit';
+import { CurrencyTotals } from '@/components/ui/list/ListKit';
+import { ColumnChooser, FilterBar, periodRange, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { Facts, PaidProgress, PreviewHead } from '@/components/ui/list/Preview';
 import type { SalesOrderDetail } from '@/components/sales/order-form/types';
@@ -99,7 +84,9 @@ const FILTER_DEFAULTS = {
   paymentStatus: '',
   counterpartyId: '',
   assignedSellerId: '',
-  period: ALL_TIME as PeriodValue,
+  period: '',
+  /** Delivery date passed, not shipped — applied to the loaded rows. */
+  overdue: '',
 };
 
 export default function SalesOrdersPage() {
@@ -113,15 +100,15 @@ export default function SalesOrdersPage() {
   const td = useTranslations('rd.doc');
   const to = useTranslations('rd.orders');
 
-  const [filters, setFilters, resetFilters] = useListFilters('orders.list', FILTER_DEFAULTS, ['status']);
-  const [search, setSearch] = useState('');
-  const debouncedSearch = useDebouncedValue(search.trim(), 350);
-  const [moreOpen, setMoreOpen] = useState(false);
-  const [overdueOnly, setOverdueOnly] = useState(false);
+  // Filters live in the URL and are remembered per user.
+  const lf = useFilterState('orders.list', FILTER_DEFAULTS);
+  const filters = lf.values;
+  const debouncedSearch = lf.debouncedSearch;
+  const overdueOnly = filters.overdue === '1';
   const [pageSize, setPageSize] = useState(ORDERS_PAGE_SIZE);
   const [hiddenCols, setHiddenCols] = usePersistentState<string[]>('orders.list.hidden', ['condition']);
   const [sort, setSort] = usePersistentState<SortState | null>('orders.list.sort', null);
-  const range = resolvePeriod(filters.period);
+  const range = periodRange(filters.period);
   const today = localIsoDate(new Date());
 
   // Modals
@@ -405,32 +392,16 @@ export default function SalesOrdersPage() {
     },
   ];
 
-  const customerOptions: SelectOption[] = [{ value: '', label: to('anyCustomer') }, ...counterparties.map((c) => ({ value: c.id, label: c.name }))];
-  const sellerOptions: SelectOption[] = [{ value: '', label: to('anySeller') }, ...sellers.map((s) => ({ value: s.id, label: `${s.firstName} ${s.lastName}` }))];
-  const stageOptions = [
-    { value: '', label: tl('all'), count: undefined as number | undefined },
-    ...STAGES.map((st) => ({ value: st as string, label: isRu ? statusMeta(st).ru : statusMeta(st).uz, count: stats[STAGE_STAT[st]] })),
+  const filterDefs: FilterDef[] = [
+    { key: 'status', kind: 'select', label: to('stage'), options: STAGES.map((st) => ({ value: st as string, label: isRu ? statusMeta(st).ru : statusMeta(st).uz, count: stats[STAGE_STAT[st]] })) },
+    { key: 'paymentStatus', kind: 'select', label: to('payment'), options: [{ value: 'UNPAID', label: td('unpaid') }, { value: 'PARTIALLY_PAID', label: td('partial') }, { value: 'PAID', label: td('paid') }] },
+    { key: 'counterpartyId', kind: 'select', label: to('customer'), searchable: true, options: counterparties.map((c) => ({ value: c.id, label: c.name })) },
+    { key: 'assignedSellerId', kind: 'select', label: to('seller'), searchable: true, options: sellers.map((sl) => ({ value: sl.id, label: `${sl.firstName} ${sl.lastName}` })) },
+    { key: 'overdue', kind: 'toggle', label: to('sigOverdue') },
+    { key: 'period', kind: 'period', label: tl('period') },
   ];
-  const paymentOptions = [
-    { value: 'UNPAID', label: td('unpaid') },
-    { value: 'PARTIALLY_PAID', label: td('partial') },
-    { value: 'PAID', label: td('paid') },
-  ];
-
-  const active: ActiveFilter[] = [];
-  if (debouncedSearch) active.push({ key: 'q', label: `«${debouncedSearch}»`, onClear: () => setSearch('') });
-  if (filters.counterpartyId) active.push({ key: 'c', label: counterparties.find((c) => c.id === filters.counterpartyId)?.name ?? to('customer'), onClear: () => setFilters({ counterpartyId: '' }) });
-  if (filters.assignedSellerId) {
-    const s = sellers.find((x) => x.id === filters.assignedSellerId);
-    active.push({ key: 's', label: s ? `${s.firstName} ${s.lastName}` : to('seller'), onClear: () => setFilters({ assignedSellerId: '' }) });
-  }
-  if (overdueOnly) active.push({ key: 'o', label: to('sigOverdue'), onClear: () => setOverdueOnly(false) });
-  const anyFilter = Boolean(debouncedSearch || filters.status || filters.paymentStatus || filters.counterpartyId || filters.assignedSellerId || filters.period.key !== 'all' || overdueOnly);
-  const clearAll = () => {
-    setSearch('');
-    setOverdueOnly(false);
-    resetFilters();
-  };
+  const anyFilter = Boolean(debouncedSearch || lf.activeCount > 0);
+  const clearAll = lf.reset;
 
   return (
     <div className="rd-page">
@@ -444,44 +415,20 @@ export default function SalesOrdersPage() {
         }
       />
 
-      <SignalStrip label={tl('summary')}>
-        <Signal tone="warning" label={to('sigNew')} value={(stats.new ?? 0) + (stats.pendingApproval ?? 0)} hint={to('sigNewHint')} active={filters.status === 'NEW'} onClick={() => setFilters({ status: filters.status === 'NEW' ? '' : 'NEW' })} />
-        <Signal tone="success" label={to('sigReady')} value={stats.readyToShip ?? 0} hint={to('sigReadyHint')} active={filters.status === 'READY_FOR_SHIPMENT'} onClick={() => setFilters({ status: filters.status === 'READY_FOR_SHIPMENT' ? '' : 'READY_FOR_SHIPMENT' })} />
-        <Signal tone="error" label={to('sigOverdue')} value={overdueCount} hint={to('sigOverdueHint')} active={overdueOnly} onClick={() => setOverdueOnly((v) => !v)} />
-        <Signal tone="info" label={to('sigActive')} value={stats.activeOrders ?? 0} hint={to('sigActiveHint')} />
-      </SignalStrip>
+      <StatCardGrid label={tl('summary')} count={4}>
+        <StatCard label={to('sigNew')} loading={statsQuery.isPending} value={(stats.new ?? 0) + (stats.pendingApproval ?? 0)} secondary={to('sigNewHint')} />
+        <StatCard label={to('sigReady')} loading={statsQuery.isPending} value={stats.readyToShip ?? 0} secondary={to('sigReadyHint')} />
+        <StatCard label={to('sigOverdue')} loading={ordersQuery.isPending} value={overdueCount} secondary={to('sigOverdueHint')} />
+        <StatCard label={to('sigActive')} loading={statsQuery.isPending} value={stats.activeOrders ?? 0} secondary={to('sigActiveHint')} />
+      </StatCardGrid>
 
-      <div className="rd-toolbar">
-        <div className="rd-toolbar-row">
-          <SearchField value={search} onChange={setSearch} placeholder={to('searchPh')} label={tl('search')} />
-          <ColumnChooser columns={columns.map((c) => ({ key: c.key, label: c.label, locked: c.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup label={to('stage')} showLabel options={stageOptions} value={filters.status} onChange={(v) => setFilters({ status: v })} />
-        </div>
-        <div className="rd-toolbar-row">
-          <ChipGroup label={to('payment')} showLabel options={paymentOptions} value={filters.paymentStatus} onChange={(v) => setFilters({ paymentStatus: v })} />
-          <span className="rd-toolbar-spacer" />
-          <MoreFiltersButton open={moreOpen} onToggle={() => setMoreOpen((o) => !o)} activeCount={(filters.counterpartyId ? 1 : 0) + (filters.assignedSellerId ? 1 : 0) + (filters.period.key !== 'all' ? 1 : 0)} controls="orders-more" />
-        </div>
-        {moreOpen && (
-          <div id="orders-more" className="rd-more-panel">
-            <div>
-              <span className="rd-field-label">{to('customer')}</span>
-              <Select options={customerOptions} value={filters.counterpartyId} onChange={(v) => setFilters({ counterpartyId: v })} searchable />
-            </div>
-            <div>
-              <span className="rd-field-label">{to('seller')}</span>
-              <Select options={sellerOptions} value={filters.assignedSellerId} onChange={(v) => setFilters({ assignedSellerId: v })} />
-            </div>
-            <div style={{ gridColumn: '1 / -1' }}>
-              <span className="rd-field-label">{tl('period')}</span>
-              <PeriodFilter value={filters.period} onChange={(p) => setFilters({ period: p })} locale={locale} />
-            </div>
-          </div>
-        )}
-        <ActiveFilters items={active} onClearAll={clearAll} />
-      </div>
+      <FilterBar
+        state={lf}
+        defs={filterDefs}
+        searchPlaceholder={to('searchPh')}
+        resultCount={ordersQuery.isPending ? null : overdueOnly ? orders.length : totalOrders}
+        columns={<ColumnChooser columns={columns.map((col) => ({ key: col.key, label: col.label, locked: col.locked }))} hidden={hiddenCols} onChange={setHiddenCols} />}
+      />
 
       <div className="rd-table-card">
         {ordersQuery.isError ? (
@@ -527,7 +474,7 @@ export default function SalesOrdersPage() {
       </div>
 
       {preview && (
-        <Drawer
+        <Drawer icon={<FileText size={20} />}
           isOpen
           onClose={() => setPreviewId(null)}
           title={to('previewTitle', { number: preview.orderNumber })}
@@ -585,7 +532,7 @@ export default function SalesOrdersPage() {
             ]}
           />
           {nextStep(preview) && (
-            <Button style={{ width: '100%' }} disabled={updatingOrderId === preview.id} onClick={() => void runStatus(preview, nextStep(preview)!.status)}>
+            <Button variant="secondary" style={{ width: '100%' }} disabled={updatingOrderId === preview.id} onClick={() => void runStatus(preview, nextStep(preview)!.status)}>
               {isRu ? nextStep(preview)!.labelRu : nextStep(preview)!.labelUz}
             </Button>
           )}
@@ -599,7 +546,7 @@ export default function SalesOrdersPage() {
       )}
 
       {/* Delete confirmation: shared dialog (role=dialog, Esc, focus kept inside) */}
-      <Modal
+      <Modal icon={<Trash2 size={20} />} tone="error"
         isOpen={Boolean(deleteConfirmOrder)}
         onClose={() => {
           if (!deleteLoading) setDeleteConfirmOrder(null);
@@ -608,7 +555,7 @@ export default function SalesOrdersPage() {
         size="sm"
         footer={
           <>
-            <Button type="button" variant="secondary" onClick={() => setDeleteConfirmOrder(null)} disabled={deleteLoading}>
+            <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setDeleteConfirmOrder(null)} disabled={deleteLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button type="button" variant="danger" onClick={handleDeleteOrder} loading={deleteLoading} loadingText={isRu ? 'Удаление…' : 'O‘chirilmoqda…'}>

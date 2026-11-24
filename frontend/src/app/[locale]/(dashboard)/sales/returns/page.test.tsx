@@ -62,6 +62,9 @@ const callsTo = (url: string) => apiFetch.mock.calls.filter(([u]) => u === url).
 describe('Sales returns page', () => {
   beforeEach(() => {
     apiFetch.mockReset();
+    // Filters live in the URL and localStorage: each test starts from a clean view.
+    window.history.replaceState(null, '', '/');
+    window.localStorage.clear();
   });
 
   it('loads the returns and the reference lists once', async () => {

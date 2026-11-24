@@ -4,7 +4,7 @@ import { CurrencyInput } from '@/components/ui/CurrencyInput';
 import { useState } from 'react';
 import { useAuth } from '@/context/AuthContext';
 import { useLocale, useTranslations } from 'next-intl';
-import { ChipGroup } from '@/components/ui/list/ListKit';
+import { FilterBar, useFilterState } from '@/components/ui/filters';
 import { apiFetch } from '@/lib/api';
 import { useApiQuery, useInvalidateApi } from '@/lib/query/useApiQuery';
 import { LoadError } from '@/components/ui/LoadError';
@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { Drawer } from '@/components/ui/Drawer';
+import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/context/ToastContext';
 import { Plus, Tag, Edit2, Check, Trash2, X } from 'lucide-react';
@@ -22,7 +22,7 @@ import { useConfirm } from '@/context/ConfirmContext';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
-import { SearchField, matchesSearch } from '@/components/ui/SearchField';
+import { matchesSearch } from '@/components/ui/SearchField';
 
 interface PriceList {
   id: string;
@@ -43,11 +43,12 @@ interface Product {
   costPrice: number;
 }
 
+const FILTER_DEFAULTS = { show: '' };
+
 export default function PricesPage() {
   const { token, company } = useAuth();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
-  const tIn = useTranslations('rd.inline');
 
   const invalidateApi = useInvalidateApi();
   const priceListsQuery = useApiQuery<PriceList[]>('/sales/price-lists');
@@ -84,8 +85,10 @@ export default function PricesPage() {
   const [editLoading, setEditLoading] = useState(false);
 
   const confirm = useConfirm();
-  const [productSearch, setProductSearch] = useState('');
-  const [pricedMode, setPricedMode] = useState<'all' | 'priced' | 'unpriced'>('all');
+  // Search and the priced filter of the open price list live in the URL and are remembered per user.
+  const lf = useFilterState('prices.lines', FILTER_DEFAULTS);
+  const productSearch = lf.search;
+  const pricedMode = lf.values.show;
   const [rowLimit, setRowLimit] = useState(100);
   const tpr = useTranslations('rd.prices');
 
@@ -266,7 +269,7 @@ export default function PricesPage() {
   };
 
   const visibleProducts = products.filter(
-    (p) => (pricedMode === 'all' || (pricedMode === 'priced') === getPriceForProduct(p.id) > 0) && matchesSearch(productSearch, ...(typeof p.name === 'object' ? [p.name.uz, p.name.ru] : [p.name]), p.sku),
+    (p) => (!pricedMode || (pricedMode === 'priced') === getPriceForProduct(p.id) > 0) && matchesSearch(productSearch, ...(typeof p.name === 'object' ? [p.name.uz, p.name.ru] : [p.name]), p.sku),
   );
 
   return (
@@ -390,8 +393,8 @@ export default function PricesPage() {
                   {!selectedPL.isDefault && (
                     <Button
                       size="sm"
-                      variant="secondary"
-                      style={{ color: 'var(--color-error-700)', display: 'flex', alignItems: 'center', gap: 6 }}
+                      variant="danger-outline"
+                      style={{ display: 'flex', alignItems: 'center', gap: 6 }}
                       onClick={() => void handleDeletePL(selectedPL)}
                     >
                       <Trash2 size={14} aria-hidden /> {isRu ? 'Удалить' : 'O‘chirish'}
@@ -400,22 +403,29 @@ export default function PricesPage() {
                 </div>
               </div>
               {products.length > 0 && (
-                <div style={{ padding: 'var(--space-3) var(--space-4)', display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap', borderBottom: '1px solid var(--color-border-light)' }}>
-                  <SearchField value={productSearch} onChange={setProductSearch} placeholder={isRu ? 'Товар или артикул' : 'Tovar yoki artikul'} style={{ maxWidth: 340 }} />
-                  <ChipGroup
-                    label={tpr('show')}
-                    options={[
-                      { value: 'all', label: tIn('hammasi'), count: products.length },
-                      { value: 'priced', label: tpr('priced'), count: selectedPL.prices?.length ?? 0 },
-                      { value: 'unpriced', label: tpr('unpriced'), count: Math.max(0, products.length - (selectedPL.prices?.length ?? 0)) },
+                <div style={{ padding: 'var(--space-3) var(--space-4)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', borderBottom: '1px solid var(--color-border-light)' }}>
+                  <FilterBar
+                    state={lf}
+                    defs={[
+                      {
+                        key: 'show',
+                        kind: 'segmented',
+                        label: tpr('show'),
+                        options: [
+                          { value: 'priced', label: tpr('priced'), count: selectedPL.prices?.length ?? 0 },
+                          { value: 'unpriced', label: tpr('unpriced'), count: Math.max(0, products.length - (selectedPL.prices?.length ?? 0)) },
+                        ],
+                      },
                     ]}
-                    value={pricedMode}
-                    onChange={(v) => setPricedMode((v || 'all') as 'all' | 'priced' | 'unpriced')}
+                    searchPlaceholder={isRu ? 'Товар или артикул' : 'Tovar yoki artikul'}
+                    resultCount={visibleProducts.length}
                   />
+                  <div style={{ display: 'flex', gap: 'var(--space-3)', alignItems: 'center', flexWrap: 'wrap' }}>
                   {Object.keys(editingPrices).length > 0 && (
                     <span className="rd-active-filter" style={{ paddingRight: 10 }}>{tpr('unsaved', { count: Object.keys(editingPrices).length })}</span>
                   )}
                   <span className="rd-sub" style={{ marginLeft: 'auto', marginTop: 0 }}>{tpr('keysHint')}</span>
+                  </div>
                 </div>
               )}
               <table className="app-table-stack" style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)' }}>
@@ -549,8 +559,9 @@ export default function PricesPage() {
       </div>
 
       {/* Create Price List Side Drawer Panel */}
-      <Drawer
+      <Modal
         isOpen={showCreatePL}
+        onSubmitShortcut={() => { if (newPLNameUz && !createLoading) void handleCreatePL(); }}
         onClose={() => setShowCreatePL(false)}
         title={isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali'}
         description={isRu ? 'Создание новой категории цен (розница, опт, дилерские)' : 'Yangi narx toifasini yaratish (chakana, ulgurji, dilerlik)'}
@@ -558,7 +569,7 @@ export default function PricesPage() {
         size="md"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', width: '100%' }}>
-            <Button id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>
+            <Button data-dialog-cancel id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button id="submit-pl-btn" onClick={handleCreatePL} disabled={!newPLNameUz} loading={createLoading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
@@ -598,11 +609,12 @@ export default function PricesPage() {
             description={isRu ? 'Подставляется в продажу, если у клиента нет своего прайс-листа.' : 'Mijozning o‘z jadvali bo‘lmasa, sotuvga shu qo‘yiladi.'}
           />
         </div>
-      </Drawer>
+      </Modal>
 
       {/* Edit Price List Side Drawer Panel */}
-      <Drawer
+      <Modal
         isOpen={showEditPL}
+        onSubmitShortcut={() => { if (editPLNameUz && !editLoading) void handleSaveEditPL(); }}
         onClose={() => setShowEditPL(false)}
         title={isRu ? 'Редактирование прайс-листа' : 'Narx jadvalini tahrirlash'}
         description={isRu ? 'Изменение параметров прайс-листа' : 'Narx jadvali parametrlarini o\'zgartirish'}
@@ -610,7 +622,7 @@ export default function PricesPage() {
         size="md"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', width: '100%' }}>
-            <Button variant="secondary" onClick={() => setShowEditPL(false)} disabled={editLoading}>
+            <Button data-dialog-cancel variant="secondary" onClick={() => setShowEditPL(false)} disabled={editLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button onClick={handleSaveEditPL} disabled={!editPLNameUz} loading={editLoading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
@@ -650,7 +662,7 @@ export default function PricesPage() {
             description={isRu ? 'Подставляется в продажу, если у клиента нет своего прайс-листа.' : 'Mijozning o‘z jadvali bo‘lmasa, sotuvga shu qo‘yiladi.'}
           />
         </div>
-      </Drawer>
+      </Modal>
 
     </div>
   );

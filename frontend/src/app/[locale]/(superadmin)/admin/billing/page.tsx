@@ -7,6 +7,8 @@ import { LoadError } from '@/components/ui/LoadError';
 import { formatDate } from '@/lib/utils';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { FilterBar, useFilterState } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SkeletonRows } from '@/components/ui/Skeleton';
@@ -19,6 +21,8 @@ const PLANS: Array<{ id: 'STARTER' | 'PROFESSIONAL' | 'ENTERPRISE'; price: strin
   { id: 'ENTERPRISE', price: '1 990 000', features: { uz: 'Cheksiz ombor va xodimlar, shaxsiy menejer', ru: 'Без ограничений по складам и сотрудникам, персональный менеджер' } },
 ];
 
+const FILTER_DEFAULTS = { plan: '' };
+
 export default function SuperAdminBillingPage() {
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
@@ -28,7 +32,9 @@ export default function SuperAdminBillingPage() {
   const th: React.CSSProperties = { padding: '12px 16px', fontWeight: 'var(--font-medium)' };
   const tb = useTranslations('rd.adminBilling');
   // A plan card filters the table to the companies on that plan.
-  const [planFilter, setPlanFilter] = useState<string>('');
+  // The plan filter lives in the URL and is remembered per user.
+  const lf = useFilterState('admin.billing', FILTER_DEFAULTS);
+  const planFilter = lf.values.plan;
   const [now] = useState(() => Date.now());
   const shown = planFilter ? tenants.filter((t) => t.plan === planFilter) : tenants;
   const trialLeft = (t: TenantCompanySummary) => (t.status === 'TRIAL' && t.trialEndsAt ? Math.ceil((new Date(t.trialEndsAt).getTime() - now) / 86400000) : null);
@@ -43,38 +49,29 @@ export default function SuperAdminBillingPage() {
         />
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 260px), 1fr))', gap: 'var(--space-4)' }}>
+      <StatCardGrid label={isRu ? 'Тарифы' : 'Tariflar'} count={3}>
         {PLANS.map((plan) => (
-          <button
+          <StatCard
             key={plan.id}
-            type="button"
-            className="adm-plan"
-            aria-pressed={planFilter === plan.id}
-            onClick={() => setPlanFilter((p) => (p === plan.id ? '' : plan.id))}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-              <span style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)', display: 'flex', alignItems: 'center', gap: 8 }}>
-                {labelOf(PLAN_LABELS, plan.id, locale)}
-                {plan.id === 'PROFESSIONAL' && <Badge variant="info">{isRu ? 'Чаще выбирают' : 'Ko‘p tanlanadi'}</Badge>}
-              </span>
-              <span className="tabular-nums" style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-                {isRu ? `Компаний: ${count(plan.id)}` : `Korxonalar: ${count(plan.id)}`}
-              </span>
-            </div>
-            <div style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', marginTop: 16 }} className="tabular-nums">
-              {plan.price} <span style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-normal)', color: 'var(--color-text-secondary)' }}>UZS / {isRu ? 'мес.' : 'oy'}</span>
-            </div>
-            <p style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', marginTop: 8, lineHeight: 1.5 }}>{plan.features[locale]}</p>
-            <span className="rd-linkbtn" style={{ paddingLeft: 0, marginTop: 8, display: 'inline-block' }}>{planFilter === plan.id ? tb('showAll') : tb('showCompanies')}</span>
-          </button>
+            label={plan.id === 'PROFESSIONAL' ? `${labelOf(PLAN_LABELS, plan.id, locale)} · ${isRu ? 'Чаще выбирают' : 'Ko‘p tanlanadi'}` : labelOf(PLAN_LABELS, plan.id, locale)}
+            value={`${plan.price} UZS / ${isRu ? 'мес.' : 'oy'}`}
+            secondary={
+              <>
+                <span className="tabular-nums" style={{ display: 'block', fontWeight: 'var(--font-medium)' }}>{isRu ? `Компаний: ${count(plan.id)}` : `Korxonalar: ${count(plan.id)}`}</span>
+                {plan.features[locale]}
+              </>
+            }
+          />
         ))}
-      </div>
+      </StatCardGrid>
 
       <Card style={{ padding: 0, overflow: 'hidden' }}>
         <h2 style={{ padding: '16px 20px', borderBottom: '1px solid var(--color-border-light)', fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
           {isRu ? 'Подписки компаний' : 'Korxonalar obunalari'}
-          {planFilter && <span className="rd-sub" style={{ display: 'inline', marginLeft: 8, fontWeight: 'var(--font-normal)' }}>{tb('filtered', { plan: labelOf(PLAN_LABELS, planFilter, locale), count: shown.length })}</span>}
         </h2>
+        <div style={{ padding: 'var(--space-3) var(--space-5)', borderBottom: '1px solid var(--color-border-light)' }}>
+          <FilterBar state={lf} defs={[{ key: 'plan', kind: 'segmented', label: isRu ? 'Тариф' : 'Tarif', options: PLANS.map((p) => ({ value: p.id, label: labelOf(PLAN_LABELS, p.id, locale), count: count(p.id) })) }]} resultCount={tenantsQuery.isPending ? null : shown.length} />
+        </div>
         {tenantsQuery.isError ? (
           <LoadError error={tenantsQuery.error} onRetry={() => void tenantsQuery.refetch()} retrying={tenantsQuery.isFetching} />
         ) : tenantsQuery.isPending ? (

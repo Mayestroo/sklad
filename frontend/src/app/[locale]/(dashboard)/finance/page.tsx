@@ -1,7 +1,8 @@
 'use client';
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import { ChipGroup } from '@/components/ui/list/ListKit';
+import { FilterBar, periodRange, SegmentedFilter, useFilterState, type FilterDef } from '@/components/ui/filters';
+import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { useState, useEffect, useCallback } from 'react';
 import { useLocale, useTranslations } from 'next-intl';
 import { useSearchParams } from 'next/navigation';
@@ -49,47 +50,13 @@ import {
   CheckCircle2,
   Edit2,
   XCircle,
-  Building,
-  DollarSign,
   Users,
   RefreshCw,
   Clock,
   ArrowUpRight,
   ArrowDownLeft,
   Trash2,
-  RotateCcw,
-} from 'lucide-react';
-
-function getPeriodDates(preset: string): { dateFrom: string; dateTo: string } {
-  const now = new Date();
-  const todayStr = now.toISOString().slice(0, 10);
-
-  switch (preset) {
-    case 'today':
-      return { dateFrom: todayStr, dateTo: todayStr };
-    case 'yesterday': {
-      const y = new Date(now);
-      y.setDate(y.getDate() - 1);
-      const s = y.toISOString().slice(0, 10);
-      return { dateFrom: s, dateTo: s };
-    }
-    case 'this_week': {
-      const start = new Date(now);
-      start.setDate(now.getDate() - now.getDay());
-      return { dateFrom: start.toISOString().slice(0, 10), dateTo: todayStr };
-    }
-    case 'this_month':
-      return {
-        dateFrom: `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`,
-        dateTo: todayStr,
-      };
-    case 'this_year':
-      return { dateFrom: `${now.getFullYear()}-01-01`, dateTo: todayStr };
-    default:
-      return { dateFrom: '', dateTo: '' };
-  }
-}
-
+  RotateCcw, Pencil, Undo2 } from 'lucide-react';
 
 
 /** One row per cash desk / account: today's and this month's in / out / net (per currency, never summed). */
@@ -143,6 +110,7 @@ function AccountFlowTable({ today, month, locale }: { today: FinanceAccountFlow[
 
 // ─── Main Finance Component ─────────────────────────────────────
 /** Transaction views shown as chips inside the Operations tab. */
+const FILTER_DEFAULTS = { account: '', counterparty: '', period: '' };
 const OPS_VIEWS = ['journal', 'income', 'expense', 'transfers', 'deleted'] as const;
 
 export default function FinancePage() {
@@ -167,14 +135,15 @@ export default function FinancePage() {
   const [txTypes, setTxTypes] = useState<TransactionType[]>([]);
   const [counterparties, setCounterparties] = useState<Counterparty[]>([]);
   const [, setLoading] = useState(true);
-  const [page, setPage] = useState(1);
+  // Operations filters live in the URL and are remembered per user; a new filter or view starts at page 1.
+  const lf = useFilterState('finance.ops', FILTER_DEFAULTS);
+  const { account: accountFilter, counterparty: counterpartyFilter } = lf.values;
+  const { from: dateFrom, to: dateTo } = periodRange(lf.values.period);
+  const filterKey = `${activeTab}|${lf.values.period}|${accountFilter}|${counterpartyFilter}`;
+  const [pageAt, setPageAt] = useState({ key: '', page: 1 });
+  const page = pageAt.key === filterKey ? pageAt.page : 1;
+  const setPage = (next: number | ((p: number) => number)) => setPageAt({ key: filterKey, page: typeof next === 'function' ? next(page) : next });
 
-  // Filters
-  const [periodPreset, setPeriodPreset] = useState<string>('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
-  const [accountFilter, setAccountFilter] = useState('');
-  const [counterpartyFilter, setCounterpartyFilter] = useState('');
 
   // Modals & Drawers
   // `?new=expense` (Sales → Sotuv xarajatlari, B13) opens that drawer.
@@ -202,14 +171,6 @@ export default function FinancePage() {
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [restoringTxId, setRestoringTxId] = useState<string | null>(null);
 
-  const handlePeriodChange = (preset: string) => {
-    setPeriodPreset(preset);
-    if (preset === 'custom') return;
-    const { dateFrom: f, dateTo: t } = getPeriodDates(preset);
-    setDateFrom(f);
-    setDateTo(t);
-    setPage(1);
-  };
 
   // Fetch Core Data
   const fetchData = useCallback(async () => {
@@ -384,6 +345,12 @@ export default function FinancePage() {
 
   const totalPages = journal ? Math.ceil(journal.total / journal.limit) : 1;
 
+  const opsFilterDefs: FilterDef[] = [
+    { key: 'account', kind: 'select', label: isRu ? 'Касса' : 'Kassa', options: accounts.map((a) => ({ value: a.id, label: `${getLocalizedName(a.name, locale)} (${a.currency})` })) },
+    { key: 'counterparty', kind: 'select', label: isRu ? 'Контрагент' : 'Kontragent', searchable: true, options: counterparties.map((cp) => ({ value: cp.id, label: cp.name })) },
+    { key: 'period', kind: 'period', label: isRu ? 'Период' : 'Davr' },
+  ];
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
       {/* ─── Top Header & Action Controls ───────────────────────────── */}
@@ -409,8 +376,6 @@ export default function FinancePage() {
             variant="primary"
             onClick={() => handleOpenDrawer('income')}
             style={{
-              backgroundColor: 'var(--color-success-600)',
-              borderColor: 'var(--color-success-600)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -421,11 +386,9 @@ export default function FinancePage() {
           </Button>
 
           <Button
-            variant="primary"
+            variant="secondary"
             onClick={() => handleOpenDrawer('expense')}
             style={{
-              backgroundColor: 'var(--color-error-600)',
-              borderColor: 'var(--color-error-600)',
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -446,132 +409,27 @@ export default function FinancePage() {
         </div>
       </div>
 
-      {/* ─── Dashboard Liquidity Banner (Always Visible) ─────────────── */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 240px), 1fr))',
-          gap: 'var(--space-4)',
-        }}
-      >
-        {/* Dollar Kassa */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: '4px solid #10b981',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(16, 185, 129, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-success-700)',
-              flexShrink: 0,
-            }}
-          >
-            <DollarSign size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu
-                ? 'Долларовая касса'
-                : 'Dollar kassa'}
-            </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-success-700)' }}>
-              {dashboardMetrics
-                ? formatCurrency(dashboardMetrics.balances.dollarKassa, locale, dashboardMetrics.balances.accountCurrencies.dollarKassa)
-                : '—'}
-            </div>
-          </div>
-        </Card>
-
-        {/* Naqd Kassa */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: '4px solid #3b82f6',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(59, 130, 246, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: 'var(--color-info-700)',
-              flexShrink: 0,
-            }}
-          >
-            <Wallet size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu
-                ? 'Наличная касса'
-                : 'Naqd kassa'}
-            </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {dashboardMetrics
-                ? formatCurrency(dashboardMetrics.balances.naqdKassa, locale, dashboardMetrics.balances.accountCurrencies.naqdKassa)
-                : '—'}
-            </div>
-          </div>
-        </Card>
-
-        {/* Hisobraqam (Bank) */}
-        <Card
-          style={{
-            padding: 'var(--space-4)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 'var(--space-3)',
-            borderLeft: '4px solid #6366f1',
-          }}
-        >
-          <div
-            style={{
-              width: 40,
-              height: 40,
-              borderRadius: 'var(--radius-md)',
-              backgroundColor: 'rgba(99, 102, 241, 0.1)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              color: '#6366f1',
-              flexShrink: 0,
-            }}
-          >
-            <Building size={20} />
-          </div>
-          <div>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu
-                ? 'Расчетный счет'
-                : 'Hisobraqam'}
-            </div>
-            <div style={{ fontSize: 'var(--text-lg)', fontWeight: 700, color: 'var(--color-text-primary)' }}>
-              {dashboardMetrics
-                ? formatCurrency(dashboardMetrics.balances.hisobRaqam, locale, dashboardMetrics.balances.accountCurrencies.hisobRaqam)
-                : '—'}
-            </div>
-          </div>
-        </Card>
-
-      </div>
+      {/* ─── Cash balances (always visible) ─────────────── */}
+      <StatCardGrid label={isRu ? 'Остатки денег' : 'Pul qoldiqlari'} count={3}>
+        <StatCard
+          label={isRu ? 'Долларовая касса' : 'Dollar kassa'}
+          loading={!dashboardMetrics}
+          value={dashboardMetrics ? formatCurrency(dashboardMetrics.balances.dollarKassa, locale, dashboardMetrics.balances.accountCurrencies.dollarKassa) : null}
+          negative={Boolean(dashboardMetrics && dashboardMetrics.balances.dollarKassa < 0)}
+        />
+        <StatCard
+          label={isRu ? 'Наличная касса' : 'Naqd kassa'}
+          loading={!dashboardMetrics}
+          value={dashboardMetrics ? formatCurrency(dashboardMetrics.balances.naqdKassa, locale, dashboardMetrics.balances.accountCurrencies.naqdKassa) : null}
+          negative={Boolean(dashboardMetrics && dashboardMetrics.balances.naqdKassa < 0)}
+        />
+        <StatCard
+          label={isRu ? 'Расчетный счет' : 'Hisobraqam'}
+          loading={!dashboardMetrics}
+          value={dashboardMetrics ? formatCurrency(dashboardMetrics.balances.hisobRaqam, locale, dashboardMetrics.balances.accountCurrencies.hisobRaqam) : null}
+          negative={Boolean(dashboardMetrics && dashboardMetrics.balances.hisobRaqam < 0)}
+        />
+      </StatCardGrid>
 
       {/* ─── Navigation Tabs ────────────────────────────────────────── */}
       <div
@@ -669,63 +527,32 @@ export default function FinancePage() {
                 </span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 200px), 1fr))', gap: 'var(--space-3)' }}>
-                {/* Kutilayotgan tushumlar */}
-                <div
-                  style={{
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'rgba(16, 185, 129, 0.08)',
-                    border: '1px solid rgba(16, 185, 129, 0.2)',
-                  }}
-                >
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-success-700)', fontWeight: 500 }}>
-                    {isRu ? 'Ожидаемые поступления (Дебиторка)' : 'Kutilayotgan tushumlar (Debitorlik)'}
-                  </div>
-                  <MultiCurrencyValue
-                    items={dashboardMetrics?.debts.receivablesByCurrency}
-                    locale={locale}
-                    color="var(--color-success-700)"
-                  />
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                    {isRu ? 'Клиенты должны нам' : 'Mijozlar bizga to‘lashi kerak'}
-                  </div>
-                  {(dashboardMetrics?.debts.customerAdvancesByCurrency.length ?? 0) > 0 && (
-                    <div style={{ marginTop: 8, borderTop: '1px solid rgba(16, 185, 129, 0.18)', paddingTop: 6 }}>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы клиентов' : 'Mijozlar avansi'}</div>
-                      <MultiCurrencyValue items={dashboardMetrics?.debts.customerAdvancesByCurrency} locale={locale} color="var(--color-info-700)" />
-                    </div>
-                  )}
-                </div>
-
-                {/* To'lanishi kerak bo'lgan qarzlar */}
-                <div
-                  style={{
-                    padding: 'var(--space-3)',
-                    borderRadius: 'var(--radius-md)',
-                    backgroundColor: 'rgba(239, 68, 68, 0.08)',
-                    border: '1px solid rgba(239, 68, 68, 0.2)',
-                  }}
-                >
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-error-700)', fontWeight: 500 }}>
-                    {isRu ? 'К оплате поставщикам (Кредиторка)' : 'Bizning qarzlarimiz (Kreditorlik)'}
-                  </div>
-                  <MultiCurrencyValue
-                    items={dashboardMetrics?.debts.payablesByCurrency}
-                    locale={locale}
-                    color="var(--color-error-700)"
-                  />
-                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)', marginTop: '4px' }}>
-                    {isRu ? 'Мы должны поставщикам' : 'Ta’minotchilarga to‘lashimiz kerak'}
-                  </div>
-                  {(dashboardMetrics?.debts.supplierAdvancesByCurrency.length ?? 0) > 0 && (
-                    <div style={{ marginTop: 8, borderTop: '1px solid rgba(239, 68, 68, 0.18)', paddingTop: 6 }}>
-                      <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{isRu ? 'Авансы поставщикам' : 'Ta’minotchilarga avanslar'}</div>
-                      <MultiCurrencyValue items={dashboardMetrics?.debts.supplierAdvancesByCurrency} locale={locale} color="var(--color-info-700)" />
-                    </div>
-                  )}
-                </div>
-              </div>
+              <StatCardGrid label={isRu ? 'Взаиморасчеты' : 'Qarzdorlik'} count={2}>
+                <StatCard
+                  label={isRu ? 'Ожидаемые поступления (Дебиторка)' : 'Kutilayotgan tushumlar (Debitorlik)'}
+                  loading={!dashboardMetrics}
+                  value={<MultiCurrencyValue inherit items={dashboardMetrics?.debts.receivablesByCurrency} locale={locale} />}
+                  secondary={
+                    (dashboardMetrics?.debts.customerAdvancesByCurrency.length ?? 0) > 0 ? (
+                      <>
+                        {isRu ? 'Авансы клиентов' : 'Mijozlar avansi'}: <MultiCurrencyValue inherit items={dashboardMetrics?.debts.customerAdvancesByCurrency} locale={locale} />
+                      </>
+                    ) : isRu ? 'Клиенты должны нам' : 'Mijozlar bizga to‘lashi kerak'
+                  }
+                />
+                <StatCard
+                  label={isRu ? 'К оплате поставщикам (Кредиторка)' : 'Bizning qarzlarimiz (Kreditorlik)'}
+                  loading={!dashboardMetrics}
+                  value={<MultiCurrencyValue inherit items={dashboardMetrics?.debts.payablesByCurrency} locale={locale} />}
+                  secondary={
+                    (dashboardMetrics?.debts.supplierAdvancesByCurrency.length ?? 0) > 0 ? (
+                      <>
+                        {isRu ? 'Авансы поставщикам' : 'Ta’minotchilarga avanslar'}: <MultiCurrencyValue inherit items={dashboardMetrics?.debts.supplierAdvancesByCurrency} locale={locale} />
+                      </>
+                    ) : isRu ? 'Мы должны поставщикам' : 'Ta’minotchilarga to‘lashimiz kerak'
+                  }
+                />
+              </StatCardGrid>
             </Card>
           </div>
 
@@ -778,89 +605,28 @@ export default function FinancePage() {
         <Card style={{ padding: 'var(--space-5)' }}>
           {/* Which operations: all / income / expense / transfers / deleted (same views as the old tabs) */}
           <div style={{ marginBottom: 'var(--space-3)' }}>
-            <ChipGroup
-              label={tfin('operations')}
-              value={activeTab as (typeof OPS_VIEWS)[number]}
-              onChange={(v) => {
-                setActiveTab((v || 'journal') as typeof activeTab);
-                setPage(1);
-              }}
-              options={[
-                { value: 'journal', label: tIn('hammasi') },
-                { value: 'income', label: isRu ? 'Приходы' : 'Kirimlar' },
-                { value: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
-                { value: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },
-                { value: 'deleted', label: isRu ? 'Удалённые' : 'O‘chirilganlar' },
-              ]}
-            />
+            <div className="rd-toolbar-row">
+              <SegmentedFilter
+                name="operations"
+                label={tfin('operations')}
+                value={activeTab}
+                onChange={(v) => setActiveTab((v || 'journal') as typeof activeTab)}
+                options={[
+                  { value: 'journal', label: tIn('hammasi') },
+                  { value: 'income', label: isRu ? 'Приходы' : 'Kirimlar' },
+                  { value: 'expense', label: isRu ? 'Расходы' : 'Chiqimlar' },
+                  { value: 'transfers', label: isRu ? 'Переводы' : 'O‘tkazmalar' },
+                  { value: 'deleted', label: isRu ? 'Удалённые' : 'O‘chirilganlar' },
+                ]}
+              />
+              <span className="rd-toolbar-spacer" />
+              <Button aria-label={isRu ? 'Обновить' : 'Yangilash'} title={isRu ? 'Обновить' : 'Yangilash'} variant="secondary" size="sm" onClick={() => fetchData()}>
+                <RefreshCw size={14} />
+              </Button>
+            </div>
           </div>
-          {/* Filters Bar */}
-          <div
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 'var(--space-3)',
-              alignItems: 'center',
-              marginBottom: 'var(--space-4)',
-              paddingBottom: 'var(--space-3)',
-              borderBottom: '1px solid var(--color-border-subtle)',
-            }}
-          >
-            {/* Period selector */}
-            <div style={{ minWidth: 160 }}>
-              <Select
-                options={[
-                  { value: '', label: isRu ? 'Все периоды' : 'Barcha davrlar' },
-                  { value: 'today', label: isRu ? 'Сегодня' : 'Bugun' },
-                  { value: 'yesterday', label: isRu ? 'Вчера' : 'Kecha' },
-                  { value: 'this_week', label: isRu ? 'На этой неделе' : 'Shu hafta' },
-                  { value: 'this_month', label: isRu ? 'В этом месяце' : 'Shu oy' },
-                  { value: 'this_year', label: isRu ? 'В этом году' : 'Shu yil' },
-                ]}
-                value={periodPreset}
-                onChange={handlePeriodChange}
-              />
-            </div>
-
-            {/* Account filter */}
-            <div style={{ minWidth: 180 }}>
-              <Select
-                options={[
-                  { value: '', label: isRu ? 'Все кассы' : 'Barcha kassalar' },
-                  ...accounts.map((a) => ({
-                    value: a.id,
-                    label: `${getLocalizedName(a.name, locale)} (${a.currency})`,
-                  })),
-                ]}
-                value={accountFilter}
-                onChange={(val) => {
-                  setAccountFilter(val);
-                  setPage(1);
-                }}
-              />
-            </div>
-
-            {/* Counterparty filter */}
-            <div style={{ minWidth: 200 }}>
-              <Select
-                options={[
-                  { value: '', label: isRu ? 'Все контрагенты' : 'Barcha kontragentlar' },
-                  ...counterparties.map((cp) => ({
-                    value: cp.id,
-                    label: cp.name,
-                  })),
-                ]}
-                value={counterpartyFilter}
-                onChange={(val) => {
-                  setCounterpartyFilter(val);
-                  setPage(1);
-                }}
-              />
-            </div>
-
-            <Button aria-label={isRu ? 'Обновить' : 'Yangilash'} title={isRu ? 'Обновить' : 'Yangilash'} variant="secondary" size="sm" onClick={() => fetchData()}>
-              <RefreshCw size={14} />
-            </Button>
+          <div style={{ marginBottom: 'var(--space-4)' }}>
+            <FilterBar state={lf} defs={opsFilterDefs} resultCount={journal ? (journal.total ?? journal.data?.length ?? null) : null} />
           </div>
 
           <TransactionsTable
@@ -942,36 +708,16 @@ export default function FinancePage() {
               paddingBottom: '8px',
             }}
           >
-            <button
-              onClick={() => setDebtsSubTab('receivables')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor:
-                  debtsSubTab === 'receivables' ? 'rgba(16, 185, 129, 0.15)' : 'transparent',
-                color: debtsSubTab === 'receivables' ? 'var(--color-success-700)' : 'var(--color-text-secondary)',
-                fontWeight: debtsSubTab === 'receivables' ? 600 : 500,
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {isRu ? 'Дебиторка (Нам должны)' : 'Mijozlarimiz qarzi (Debitorlik)'}
-            </button>
-            <button
-              onClick={() => setDebtsSubTab('payables')}
-              style={{
-                padding: '6px 14px',
-                borderRadius: 'var(--radius-md)',
-                backgroundColor:
-                  debtsSubTab === 'payables' ? 'rgba(239, 68, 68, 0.15)' : 'transparent',
-                color: debtsSubTab === 'payables' ? 'var(--color-error-700)' : 'var(--color-text-secondary)',
-                fontWeight: debtsSubTab === 'payables' ? 600 : 500,
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              {isRu ? 'Кредиторка (Мы должны)' : 'Bizning qarzlarimiz (Kreditorlik)'}
-            </button>
+            <SegmentedFilter
+              name="debts"
+              label={isRu ? 'Чьи долги' : 'Kimning qarzi'}
+              value={debtsSubTab}
+              onChange={(v) => v && setDebtsSubTab(v as 'receivables' | 'payables')}
+              options={[
+                { value: 'receivables', label: isRu ? 'Дебиторка (Нам должны)' : 'Mijozlarimiz qarzi (Debitorlik)' },
+                { value: 'payables', label: isRu ? 'Кредиторка (Мы должны)' : 'Bizning qarzlarimiz (Kreditorlik)' },
+              ]}
+            />
           </div>
 
           <div style={{ overflowX: 'auto' }}>
@@ -1078,10 +824,20 @@ export default function FinancePage() {
 
       {/* ─── Edit Transaction Modal ─────────────────────────────────── */}
       {editingTx && (
-        <Modal
+        <Modal icon={<Pencil size={20} />}
           isOpen={true}
           title={isRu ? 'Редактировать операцию' : 'Operatsiyani tahrirlash'}
           onClose={() => setEditingTx(null)}
+          footer={
+            <>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setEditingTx(null)} disabled={savingEdit}>
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="primary" onClick={handleSaveEdit} disabled={savingEdit}>
+                {savingEdit ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <Select
@@ -1112,24 +868,36 @@ export default function FinancePage() {
                 onChange={(e) => setEditComment(e.target.value)}
               />
             </div>
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setEditingTx(null)} disabled={savingEdit}>
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="primary" onClick={handleSaveEdit} disabled={savingEdit}>
-                {savingEdit ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить' : 'Saqlash'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
 
       {/* ─── Storno (Cancel) Confirmation Modal ─────────────────────── */}
       {stornoTx && (
-        <Modal
+        <Modal icon={<Undo2 size={20} />} tone="warning"
           isOpen={true}
-          title={isRu ? 'Аннулирование операции (Сторно)' : 'Operatsiyani bekor qilish (Storno)'}
+          title={isRu ? 'Сторнирование операции' : 'Operatsiyani stornolash'}
           onClose={() => setStornoTx(null)}
+          footer={
+            <>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setStornoTx(null)} disabled={stornoLoading}>
+                {isRu ? 'Назад' : 'Orqaga'}
+              </Button>
+              <Button
+                variant="danger"
+                onClick={handleStorno}
+                disabled={stornoLoading}
+              >
+                {stornoLoading
+                  ? isRu
+                    ? 'Аннулирование...'
+                    : 'Bekor qilinmoqda...'
+                  : isRu
+                  ? 'Подтвердить Сторно'
+                  : 'Bekor qilishni tasdiqlash'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div
@@ -1173,38 +941,38 @@ export default function FinancePage() {
                 onChange={(e) => setStornoReason(e.target.value)}
               />
             </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)', marginTop: 'var(--space-2)' }}>
-              <Button variant="secondary" onClick={() => setStornoTx(null)} disabled={stornoLoading}>
-                {isRu ? 'Назад' : 'Orqaga'}
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleStorno}
-                disabled={stornoLoading}
-                style={{ backgroundColor: 'var(--color-error-500)', borderColor: 'var(--color-error-500)' }}
-              >
-                {stornoLoading
-                  ? isRu
-                    ? 'Аннулирование...'
-                    : 'Bekor qilinmoqda...'
-                  : isRu
-                  ? 'Подтвердить Сторно'
-                  : 'Bekor qilishni tasdiqlash'}
-              </Button>
-            </div>
           </div>
         </Modal>
       )}
 
       {/* ─── Move Transaction to Trash Confirmation Modal ───────────── */}
       {deletingTx && (
-        <Modal
+        <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           title={isRu ? 'Переместить операцию в корзину?' : 'Operatsiyani savatga ko‘chirish?'}
           onClose={() => {
             if (!deleteLoading) setDeletingTx(null);
           }}
+          footer={
+            <>
+              <Button data-dialog-cancel
+                variant="secondary"
+                onClick={() => setDeletingTx(null)}
+                disabled={deleteLoading}
+              >
+                {isRu ? 'Отмена' : 'Bekor qilish'}
+              </Button>
+              <Button variant="danger" onClick={handleDelete} disabled={deleteLoading}>
+                {deleteLoading
+                  ? isRu
+                    ? 'Перемещение...'
+                    : 'Ko‘chirilmoqda...'
+                  : isRu
+                    ? 'Переместить в корзину'
+                    : 'Savatga ko‘chirish'}
+              </Button>
+            </>
+          }
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             <div
@@ -1230,25 +998,6 @@ export default function FinancePage() {
                     ? 'Операция будет только перемещена в корзину; финансовые проводки не изменятся.'
                     : 'Operatsiya faqat savatga ko‘chiriladi; moliyaviy harakatlar o‘zgarmaydi.'}
               </p>
-            </div>
-
-            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-2)' }}>
-              <Button
-                variant="secondary"
-                onClick={() => setDeletingTx(null)}
-                disabled={deleteLoading}
-              >
-                {isRu ? 'Отмена' : 'Bekor qilish'}
-              </Button>
-              <Button variant="danger" onClick={handleDelete} disabled={deleteLoading}>
-                {deleteLoading
-                  ? isRu
-                    ? 'Перемещение...'
-                    : 'Ko‘chirilmoqda...'
-                  : isRu
-                    ? 'Переместить в корзину'
-                    : 'Savatga ko‘chirish'}
-              </Button>
             </div>
           </div>
         </Modal>
@@ -1487,9 +1236,8 @@ function TransactionsTable({
                             </Button>
                             <Button
                               size="sm"
-                              variant="secondary"
+                              variant="danger-outline"
                               onClick={() => onStorno(tx)}
-                              style={{ color: 'var(--color-error-700)' }}
                               aria-label={isRu ? 'Аннулировать операцию' : 'Operatsiyani bekor qilish'}
                             >
                               <XCircle size={14} />
@@ -1498,9 +1246,8 @@ function TransactionsTable({
                         )}
                         <Button
                           size="sm"
-                          variant="secondary"
+                          variant="danger-outline"
                           onClick={() => onDelete(tx)}
-                          style={{ color: 'var(--color-error-700)' }}
                           aria-label={isRu ? 'Переместить в корзину' : 'Savatga ko‘chirish'}
                         >
                           <Trash2 size={14} />
@@ -1788,13 +1535,6 @@ function FinanceTransactionDrawer({
     exchange: isRu ? 'Конвертация валюты (USD ↔ UZS)' : 'Valyuta konvertatsiyasi',
   };
 
-  const colorMap = {
-    // -600 tones: white button text meets WCAG AA (the -500 tones were 2.3–3.8:1)
-    income: 'var(--color-success-600)',
-    expense: 'var(--color-error-600)',
-    transfer: 'var(--color-info-600)',
-    exchange: 'var(--color-primary-600)',
-  };
 
   return (
     <Drawer
@@ -1811,8 +1551,8 @@ function FinanceTransactionDrawer({
       onSubmitShortcut={() => handleSubmit()}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
-            {isRu ? 'Отмена (Esc)' : 'Bekor qilish (Esc)'}
+          <Button data-dialog-cancel variant="secondary" onClick={onClose} disabled={loading}>
+            {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button
             variant="primary"
@@ -1820,8 +1560,6 @@ function FinanceTransactionDrawer({
             disabled={loading}
             title="Ctrl+Enter"
             style={{
-              backgroundColor: colorMap[mode],
-              borderColor: colorMap[mode],
               display: 'flex',
               alignItems: 'center',
               gap: '6px',
@@ -1911,14 +1649,7 @@ function FinanceTransactionDrawer({
 
         {/* Summa */}
         <div>
-          <label
-            style={{
-              fontSize: 'var(--text-sm)',
-              fontWeight: 'var(--font-medium)',
-              display: 'block',
-              marginBottom: '6px',
-            }}
-          >
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
             {isRu ? 'Сумма' : 'Summa'} ({fromAccount?.currency || currency}) *
           </label>
           <MoneyInput
@@ -1935,7 +1666,7 @@ function FinanceTransactionDrawer({
 
         {!isTransferOrExchange && fromAccount?.currency === 'USD' && (
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
               {isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
             </label>
             <MoneyInput
@@ -1951,7 +1682,7 @@ function FinanceTransactionDrawer({
 
         {isTransferOrExchange && !isMultiCurrency && fromAccount?.currency === 'USD' && (
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
               {isRu ? 'Учётный курс (1 USD = UZS) *' : 'Hisob kursi (1 USD = UZS) *'}
             </label>
             <MoneyInput
@@ -1964,8 +1695,8 @@ function FinanceTransactionDrawer({
           </div>
         )}
 
-        {/* Multi-currency Exchange Box */}
-        {isMultiCurrency && (
+        {/* Multi-currency Exchange Box (transfers only: income/expense do not send it) */}
+        {isTransferOrExchange && isMultiCurrency && (
           <div
             style={{
               padding: '12px 14px',
@@ -1982,7 +1713,7 @@ function FinanceTransactionDrawer({
             </span>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
                   {isRu ? 'Курс (1 USD = UZS)' : 'Kurs (1 USD = UZS)'}
                 </label>
                 <MoneyInput
@@ -1997,7 +1728,7 @@ function FinanceTransactionDrawer({
                 />
               </div>
               <div>
-                <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
                   {isRu ? 'Итоговая сумма' : 'Qabul qilinadigan summa'} ({toAccount?.currency})
                 </label>
                 <MoneyInput
@@ -2026,7 +1757,7 @@ function FinanceTransactionDrawer({
             <Select
               label={isRu ? 'Контрагент' : 'Kontragent'}
               options={[
-                { value: '', label: isRu ? '— Не выбран (Прямой доход/расход) —' : '— Tanlanmagan —' },
+                { value: '', label: isRu ? 'Не выбран (прямой доход/расход)' : 'Tanlanmagan' },
                 ...counterparties.map((cp) => ({
                   value: cp.id,
                   label: cp.name,
@@ -2100,7 +1831,7 @@ function FinanceTransactionDrawer({
             <Select
               label={isRu ? 'Категория платежа' : 'To‘lov toifasi / sababi'}
               options={[
-                { value: '', label: isRu ? '— Выберите категорию —' : '— Toifani tanlang —' },
+                { value: '', label: isRu ? 'Выберите категорию' : 'Toifani tanlang' },
                 ...txTypes
                   .filter((t) => (mode === 'income' ? t.direction === 'INCOME' : t.direction === 'EXPENSE'))
                   .map((t) => ({
@@ -2116,14 +1847,7 @@ function FinanceTransactionDrawer({
 
         {/* Izoh */}
         <div>
-          <label
-            style={{
-              fontSize: 'var(--text-sm)',
-              fontWeight: 'var(--font-medium)',
-              display: 'block',
-              marginBottom: '6px',
-            }}
-          >
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
             {isRu ? 'Примечание (необязательно)' : 'Izoh (ixtiyoriy)'}
           </label>
           <Input
