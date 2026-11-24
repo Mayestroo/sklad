@@ -94,7 +94,7 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, title, descript
         <div style={{ flex: 1, overflowY: 'auto', padding: '24px', display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>{children}</div>
 
         {footer && !asking && (
-          <div style={{ padding: '16px 24px', borderTop: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-secondary)', flexShrink: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>{footer}</div>
+          <div className="app-drawer-footer" style={{ padding: '16px 24px', borderTop: '1px solid var(--color-border-light)', backgroundColor: 'var(--color-bg-secondary)', flexShrink: 0, display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: '12px', flexWrap: 'wrap' }}>{footer}</div>
         )}
         {asking && <DiscardPrompt isRu={isRu} keepRef={keepRef} onKeep={keepEditing} onDiscard={discard} padding="16px 24px" />}
       </div>

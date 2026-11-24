@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { Modal } from './Modal';
@@ -111,5 +112,30 @@ describe('Drawer: same rules', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Yopish' }));
     expect(onClose).not.toHaveBeenCalled();
     expect(screen.getByRole('alert')).toBeTruthy();
+  });
+});
+
+describe('Modal: focus returns to the opener', () => {
+  it('also when a field inside takes focus with autoFocus while mounting', async () => {
+    function Page() {
+      const [open, setOpen] = useState(false);
+      return (
+        <>
+          <button onClick={() => setOpen(true)}>Ochish</button>
+          {open && (
+            <Drawer isOpen onClose={() => setOpen(false)} title="Yangi">
+              <input aria-label="Nomi" autoFocus />
+            </Drawer>
+          )}
+        </>
+      );
+    }
+    render(<Page />);
+    const opener = screen.getByRole('button', { name: 'Ochish' });
+    opener.focus();
+    fireEvent.click(opener);
+    expect(document.activeElement).toBe(screen.getByLabelText('Nomi'));
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await vi.waitFor(() => expect(document.activeElement).toBe(opener));
   });
 });

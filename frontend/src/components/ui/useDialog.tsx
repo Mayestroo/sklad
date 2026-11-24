@@ -13,6 +13,18 @@ const CHOICES = '[role="option"], [role="radio"], [role="checkbox"], [role="swit
 /** Dialogs and drawers open at the same time: only the top one handles keys. */
 const openStack: string[] = [];
 
+/**
+ * The element that had focus before the latest focus move. A field with autoFocus inside a dialog
+ * takes focus while React mounts it — before the dialog's effect runs — so at that point the opener
+ * is the element focused just before.
+ */
+let focusedBefore: HTMLElement | null = null;
+if (typeof document !== 'undefined') {
+  document.addEventListener('focusout', (e) => {
+    if (e.target instanceof HTMLElement) focusedBefore = e.target;
+  }, true);
+}
+
 export interface DialogOptions {
   isOpen: boolean;
   /** Stable id of this surface (useId()). */
@@ -58,8 +70,9 @@ export function useDialog({ isOpen, id, onClose, onSubmitShortcut, confirmDiscar
     openStack.push(id);
     const isTop = () => openStack[openStack.length - 1] === id;
     dirtyRef.current = false;
-    const opener = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const surface = surfaceRef.current;
+    const active = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const opener = active && surface?.contains(active) ? focusedBefore : active;
     const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     const timer = window.setTimeout(() => {
