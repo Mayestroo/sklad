@@ -5,7 +5,6 @@ import { useTranslations } from 'next-intl';
 import { useMemo, useRef, useState } from 'react';
 import { AlertTriangle, Calculator, Info, Plus, Save, Trash2, ListChecks } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
-import { useConfirm } from '@/context/ConfirmContext';
 import { apiFetch } from '@/lib/api';
 import { errorMessage, formatCurrency, formatQuantity } from '@/lib/utils';
 import { unitLabel } from '@/lib/units';
@@ -96,7 +95,6 @@ export function RecipeFormModal({
 }: RecipeFormModalProps) {
   const t = useTranslations('production');
   const { token, company } = useAuth();
-  const confirm = useConfirm();
   const formRef = useRef<HTMLFormElement>(null);
 
   // The parent mounts this form when it opens (keyed by recipe), so the
@@ -113,7 +111,6 @@ export function RecipeFormModal({
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState('');
   const [busy, setBusy] = useState(false);
-  const [dirty, setDirty] = useState(false);
   // Created here before the parent's lists reload.
   const [createdProducts, setCreatedProducts] = useState<RecipeProduct[]>([]);
   const [createdMaterials, setCreatedMaterials] = useState<MaterialCard[]>([]);
@@ -132,7 +129,6 @@ export function RecipeFormModal({
   const duplicateIds = new Set(rows.map((r) => r.productId).filter((id, i, all) => id && all.indexOf(id) !== i));
 
   const money = (value: number | null) => formatCurrency(value ?? 0, locale, 'UZS');
-  const touch = () => setDirty(true);
 
   const productOptions: SelectOption[] = allProducts
     .filter((p) => p.id !== undefined)
@@ -156,7 +152,6 @@ export function RecipeFormModal({
   };
 
   const updateRow = (key: number, patch: Partial<MaterialRow>) => {
-    touch();
     setRows((current) => current.map((row) => (row.key === key ? { ...row, ...patch } : row)));
   };
 
@@ -173,7 +168,6 @@ export function RecipeFormModal({
         setCreatedMaterials((current) => mergeById(current, [{ ...product, stock_qty: 0 }]));
         updateRow(target.rowKey, { productId: product.id, unit: '' });
       }
-      touch();
       await onProductsChanged();
     } catch (e) {
       setFormError(errorMessage(e) || t('yaratilganMahsulotniYuklabBolmadi'));
@@ -234,7 +228,6 @@ export function RecipeFormModal({
           }),
         }),
       });
-      setDirty(false);
       await onSaved(saved.id, recipe ? t('retsepturaYangilandi') : t('retsepturaSaqlandi'));
     } catch (e) {
       setFormError(errorMessage(e) || t('retsepturaniSaqlabBolmadi'));
@@ -243,18 +236,9 @@ export function RecipeFormModal({
     }
   };
 
-  const requestClose = async () => {
+  // Asking before losing typed input is the dialog's job (backdrop, Esc, ✕ and Cancel all go through it).
+  const requestClose = () => {
     if (busy) return;
-    if (dirty) {
-      const ok = await confirm({
-        title: t('saqlamasdanYopilsinmi'),
-        description: t('retsepturadagiOzgarishlarYoqoladi'),
-        variant: 'warning',
-        confirmText: t('yopish'),
-        cancelText: t('davomEtish'),
-      });
-      if (!ok) return;
-    }
     onClose();
   };
 
@@ -280,15 +264,15 @@ export function RecipeFormModal({
 
   return (
     <>
-      <Modal icon={<ListChecks size={20} />}
+      <Modal icon={<ListChecks size={20} />} description={t('recipeDialogDesc')}
         isOpen={isOpen}
-        onClose={() => void requestClose()}
+        onClose={() => requestClose()}
         onSubmitShortcut={() => void submit()}
         title={recipe ? t('retsepturaniTahrirlash') : t('yangiRetseptura')}
         size="2xl"
         footer={
           <>
-            <Button type="button" variant="outline" onClick={() => void requestClose()} disabled={busy}>
+            <Button data-dialog-cancel type="button" variant="outline" onClick={() => requestClose()} disabled={busy}>
               {t('bekorQilish')}
             </Button>
             <Button type="button" onClick={() => void submit()} disabled={busy} aria-busy={busy}>
@@ -312,68 +296,68 @@ export function RecipeFormModal({
             </div>
           )}
 
-          {/* 1. Finished product and output norm */}
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, alignItems: 'start' }}>
-            <div data-invalid={Boolean(errors.product)} style={{ gridColumn: 'span 2' }}>
-              <Select
-                label={`${t('tayyorMahsulot')} *`}
-                options={productOptions}
-                value={productId}
-                onChange={(value) => {
-                  touch();
-                  setProductId(value);
-                  setErrors((e) => ({ ...e, product: '' }));
-                }}
-                searchable
-                placeholder={t('mahsulotniTanlangYokiYarating')}
-                onCreateNew={(query) => setQuickCreate({ kind: 'FINISHED_PRODUCT', name: query ?? '' })}
-                createNewLabel={t('yangiMahsulotQoshish')}
-                noOptionsText={t('natijaTopilmadi')}
-                error={errors.product || undefined}
-              />
-            </div>
-            <div>
-              <label htmlFor="recipe-output" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
-                {t('ishlabChiqarishNormasi')} *
-              </label>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <DecimalInput
-                  id="recipe-output"
-                  value={outputQuantity}
-                  invalid={Boolean(errors.output)}
-                  onValueChange={(value) => {
-                    touch();
-                    setOutputQuantity(value);
+          {/* 1. Finished product and output quantity */}
+          <section aria-labelledby="recipe-sec-product" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h3 id="recipe-sec-product" className="dlg-section" style={{ margin: 0, padding: 0, borderTop: 'none' }}>{t('recipeSectionProduct')}</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, alignItems: 'start' }}>
+              <div data-invalid={Boolean(errors.product)} style={{ gridColumn: 'span 2' }}>
+                <Select
+                  label={`${t('tayyorMahsulot')} *`}
+                  options={productOptions}
+                  value={productId}
+                  onChange={(value) => {
+                    setProductId(value);
+                    setErrors((e) => ({ ...e, product: '' }));
                   }}
-                  onBlur={() => setErrors((e) => ({ ...e, output: parseDecimal(outputQuantity)! > 0 ? '' : t('ishlabChiqarishNormasi0Dan') }))}
-                  style={inputStyle(Boolean(errors.output))}
+                  searchable
+                  placeholder={t('mahsulotniTanlangYokiYarating')}
+                  onCreateNew={(query) => setQuickCreate({ kind: 'FINISHED_PRODUCT', name: query ?? '' })}
+                  createNewLabel={t('yangiMahsulotQoshish')}
+                  noOptionsText={t('natijaTopilmadi')}
+                  error={errors.product || undefined}
                 />
-                <span style={{ color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>{finished ? finishedUnit : ''}</span>
               </div>
-              {fieldError('output')}
+              <div>
+                <label htmlFor="recipe-output" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
+                  {t('chiqadiganMiqdor')} *
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <DecimalInput
+                    id="recipe-output"
+                    value={outputQuantity}
+                    invalid={Boolean(errors.output)}
+                    aria-describedby="recipe-output-hint"
+                    onValueChange={(value) => setOutputQuantity(value)}
+                    onBlur={() => setErrors((e) => ({ ...e, output: parseDecimal(outputQuantity)! > 0 ? '' : t('ishlabChiqarishNormasi0Dan') }))}
+                    style={{ ...inputStyle(Boolean(errors.output)), paddingRight: 64 }}
+                  />
+                  <span aria-hidden style={{ position: 'absolute', right: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', pointerEvents: 'none' }}>
+                    {normUnitText}
+                  </span>
+                </div>
+                {fieldError('output') ?? (
+                  <div id="recipe-output-hint" style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 4 }}>
+                    {t('outputHint')}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center', marginTop: -6 }}>
-            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-              {t('quyidaTayyorMahsulotUchunXomashyo', { v0: formatQuantity(parseDecimal(outputQuantity) ?? 0), normUnitText })}
-            </div>
-            <Checkbox
-              label={t('faolRetseptura')}
-              checked={isActive}
-              onChange={(e) => {
-                touch();
-                setIsActive(e.target.checked);
-              }}
-            />
-          </div>
-          {otherRecipe && (
-            <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
-              <Info size={16} aria-hidden />
-              {t('buMahsulotdaBoshqaFaolRetseptura')}
-            </div>
-          )}
+            {otherRecipe && (
+              <div role="status" style={{ display: 'flex', gap: 8, alignItems: 'center', padding: '8px 12px', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
+                <Info size={16} aria-hidden />
+                {t('buMahsulotdaBoshqaFaolRetseptura')}
+              </div>
+            )}
+          </section>
 
           {/* 2. Raw materials: quantity, unit, loss, cost */}
+          <section aria-labelledby="recipe-sec-materials" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <h3 id="recipe-sec-materials" className="dlg-section" style={{ margin: 0 }}>
+            {t('recipeSectionMaterials')}
+            {rows.some((r) => r.productId) && (
+              <span style={{ marginLeft: 6, color: 'var(--color-text-secondary)', fontWeight: 'var(--font-normal)' }}>{rows.filter((r) => r.productId).length}</span>
+            )}
+          </h3>
           <div style={{ border: '1px solid var(--color-border-light)', borderRadius: 'var(--radius-md)', overflow: 'hidden' }}>
             <div style={{ overflowX: 'auto' }}>
               <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 'var(--text-sm)', minWidth: 900 }}>
@@ -474,7 +458,7 @@ export function RecipeFormModal({
                               <span style={{ color: 'var(--color-text-secondary)' }}> / {unitLabel(entryUnit, locale)}</span>
                             </>
                           ) : (
-                            <span className="prod-skeleton" aria-hidden style={{ width: 80, marginLeft: 'auto', animation: 'none' }} />
+                            <span style={{ color: 'var(--color-text-secondary)' }}>—</span>
                           )}
                         </td>
                         <td style={{ ...td, textAlign: 'right', paddingTop: 16, fontWeight: 600 }} className="tabular-nums">
@@ -487,7 +471,6 @@ export function RecipeFormModal({
                             title={t('qatorniOchirish')}
                             disabled={rows.length === 1}
                             onClick={() => {
-                              touch();
                               setRows((current) => current.filter((r) => r.key !== row.key));
                             }}
                             style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'none', border: 'none', borderRadius: 'var(--radius-md)', cursor: rows.length === 1 ? 'not-allowed' : 'pointer', color: 'var(--color-error-700)', opacity: rows.length === 1 ? 0.4 : 1 }}
@@ -520,7 +503,6 @@ export function RecipeFormModal({
                 variant="outline"
                 size="sm"
                 onClick={() => {
-                  touch();
                   setRows((current) => [...current, newRow()]);
                 }}
               >
@@ -529,31 +511,33 @@ export function RecipeFormModal({
             </div>
           </div>
 
+          </section>
+
           {/* 3. Summary (TZ 4.4) */}
-          <div data-testid="recipe-cost-summary" aria-live="polite" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: 12, padding: 16, borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)' }}>
-            <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
-                <Calculator size={13} aria-hidden /> {t('normaUchunXomashyo')} ({formatQuantity(parseDecimal(outputQuantity) ?? 0)} {finishedUnit})
+          <section aria-labelledby="recipe-sec-cost" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <h3 id="recipe-sec-cost" className="dlg-section" style={{ margin: 0 }}>{t('recipeSectionCost')}</h3>
+            <div data-testid="recipe-cost-summary" aria-live="polite" style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-3)' }}>
+              <div style={{ flex: '1 1 220px', padding: '12px 16px', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-tertiary)' }}>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <Calculator size={13} aria-hidden /> {t('normaUchunXomashyo')} ({formatQuantity(parseDecimal(outputQuantity) ?? 0)} {normUnitText})
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', marginTop: 2 }} className="tabular-nums">{money(estimate.normTotal)}</div>
               </div>
-              <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', textAlign: 'right' }} className="tabular-nums">{money(estimate.normTotal)}</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-                {t('n1Tannarxi', { finishedUnit })}{' '}
-                <span title={t('xomashyoKartalaridagiNarxBoyicha')}>({t('taxminiy')})</span>
+              <div style={{ flex: '1 1 220px', padding: '12px 16px', borderRadius: 'var(--radius-md)', background: 'var(--color-primary-50)' }}>
+                <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
+                  {t('n1Tannarxi', { finishedUnit: normUnitText })} ({t('taxminiy')})
+                </div>
+                <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--color-primary-700)', marginTop: 2 }} className="tabular-nums">{money(estimate.perUnit)}</div>
               </div>
-              <div style={{ fontWeight: 700, fontSize: 'var(--text-lg)', color: 'var(--color-primary-700)', textAlign: 'right' }} className="tabular-nums">{money(estimate.perUnit)}</div>
             </div>
-            <div style={{ gridColumn: '1 / -1', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>
-              {t('taxminiyTannarxXomashyoKartalaridagiNarx')}
-            </div>
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)' }}>{t('costHintShort')}</div>
             {estimate.missingPrice && (
-              <div style={{ gridColumn: '1 / -1', display: 'flex', gap: 6, alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
+              <div role="status" style={{ display: 'flex', gap: 6, alignItems: 'center', fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
                 <AlertTriangle size={14} aria-hidden />
                 {t('narxiYoqXomashyoBorTannarx')}
               </div>
             )}
-          </div>
+          </section>
 
           <div>
             <label htmlFor="recipe-note" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)', marginBottom: 4 }}>
@@ -564,11 +548,14 @@ export function RecipeFormModal({
               rows={2}
               value={note}
               onChange={(e) => {
-                touch();
                 setNote(e.target.value);
               }}
               style={{ width: '100%', padding: '8px 10px', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)', fontSize: 'var(--text-sm)', resize: 'vertical' }}
             />
+          </div>
+          <div>
+            <Checkbox label={t('faolRetseptura')} checked={isActive} onChange={(e) => setIsActive(e.target.checked)} />
+            <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', marginTop: 2, paddingLeft: 28 }}>{t('faolRetsepturaHint')}</div>
           </div>
         </form>
       </Modal>

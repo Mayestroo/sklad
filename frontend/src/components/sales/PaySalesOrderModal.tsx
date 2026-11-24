@@ -192,7 +192,7 @@ export function PaySalesOrderModal({
       title={isRu ? `Оплата заказа — ${order.orderNumber}` : `Buyurtma to‘lovi — ${order.orderNumber}`}
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={onClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="submit" form="pay-sales-order-modal-form" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

@@ -441,7 +441,7 @@ export default function ReturnsPage() {
         size="sm"
         footer={
           <>
-            <Button type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
+            <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button type="button" variant="danger" onClick={handleDeleteReturn} loading={deleteLoading} loadingText={isRu ? 'Удаление…' : 'O‘chirilmoqda…'}>

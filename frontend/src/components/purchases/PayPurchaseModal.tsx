@@ -182,7 +182,7 @@ export function PayPurchaseModal({
       }
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={onClose} disabled={loading}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={onClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="submit" form="pay-purchase-modal-form" disabled={loading || isCurrencyMismatch} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

@@ -16,6 +16,7 @@ import { LoadError } from '@/components/ui/LoadError';
 import { formatCurrency, formatPercent, formatPriceOrUnset, errorMessage } from '@/lib/utils';
 import { catalogMarkupPercent } from '@/lib/inventory-cost';
 import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
 import { Badge } from '@/components/ui/Badge';
 import { Modal } from '@/components/ui/Modal';
 import {
@@ -425,7 +426,7 @@ export default function ProductsPage() {
           size="md"
           footer={
             <>
-              <Button variant="secondary" onClick={() => setSelectedProduct(null)}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setSelectedProduct(null)}>
                 {isRu ? 'Закрыть' : 'Yopish'}
               </Button>
             </>
@@ -491,11 +492,11 @@ export default function ProductsPage() {
         <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={true}
           onClose={() => setDeletingProduct(null)}
-          title={isRu ? 'Удалить товар?' : 'Tovarni o‘chirishni tasdiqlaysizmi?'}
+          title={isRu ? 'Удалить товар?' : 'Tovar o‘chirilsinmi?'}
           size="sm"
           footer={
             <>
-              <Button variant="secondary" onClick={() => setDeletingProduct(null)} disabled={deleteLoading}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeletingProduct(null)} disabled={deleteLoading}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button
@@ -541,7 +542,7 @@ export default function ProductsPage() {
           title={isRu ? 'Управление категориями товаров' : 'Mahsulot kategoriyalarini boshqarish'}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setIsCategoryModalOpen(false)}>
                 {isRu ? 'Закрыть' : 'Yopish'}
               </Button>
             </>
@@ -549,29 +550,27 @@ export default function ProductsPage() {
         >
           <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
             {/* Create category form */}
-            <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', padding: '12px', backgroundColor: 'var(--color-bg-secondary)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
-              <div style={{ fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)' }}>
-                {isRu ? 'Новая категория' : 'Yangi kategoriya qo‘shish'}
+            <form onSubmit={handleCreateCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)', padding: '14px 16px', backgroundColor: 'var(--color-bg-subtle)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border-light)' }}>
+              <div style={{ fontSize: 'var(--text-sm)', fontWeight: 'var(--font-semibold)' }}>
+                {isRu ? 'Новая категория' : 'Yangi kategoriya'}
               </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-2)', alignItems: 'center' }}>
-                <input
-                  type="text"
+              <div className="cat-new-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: 'var(--space-3)', alignItems: 'end' }}>
+                <Input
+                  label={isRu ? 'Название (узб) *' : 'Nomi (o‘zbekcha) *'}
                   required
                   value={newCatNameUz}
                   onChange={(e) => setNewCatNameUz(e.target.value)}
-                  placeholder={isRu ? 'Название (узб) *' : "Nomi (o'zbekcha) *"}
-                  style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+                  placeholder={isRu ? 'Напр. Напитки' : 'Masalan: Ichimliklar'}
                 />
-                <input
-                  type="text"
+                <Input
+                  label={isRu ? 'Название (рус)' : 'Nomi (ruscha)'}
                   value={newCatNameRu}
                   onChange={(e) => setNewCatNameRu(e.target.value)}
-                  placeholder={isRu ? 'Название (рус)' : 'Nomi (ruscha)'}
-                  style={{ width: '100%', padding: '6px 10px', fontSize: 'var(--text-xs)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
+                  placeholder={isRu ? 'Необязательно' : 'Ixtiyoriy'}
                 />
-                <Button type="submit" size="sm" variant="primary" disabled={createCatLoading}>
-                  <Plus size={14} />
-                  {createCatLoading ? '...' : (isRu ? 'Добавить' : 'Qo‘shish')}
+                <Button type="submit" variant="primary" disabled={createCatLoading}>
+                  <Plus size={16} aria-hidden />
+                  {createCatLoading ? (isRu ? 'Добавление…' : 'Qo‘shilmoqda…') : isRu ? 'Добавить' : 'Qo‘shish'}
                 </Button>
               </div>
             </form>
@@ -579,8 +578,8 @@ export default function ProductsPage() {
             {/* Categories List */}
             <div style={{ maxHeight: '350px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
               {categories.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 'var(--space-4)', color: 'var(--color-text-tertiary)', fontSize: 'var(--text-xs)' }}>
-                  {isRu ? 'Категории отсутствуют' : 'Kategoriyalar mavjud emas'}
+                <div style={{ textAlign: 'center', padding: 'var(--space-5) var(--space-4)', color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)', border: '1px dashed var(--color-border)', borderRadius: 'var(--radius-md)' }}>
+                  {isRu ? 'Категорий пока нет. Добавьте первую выше — товары можно будет группировать и фильтровать.' : 'Hali kategoriya yo‘q. Yuqorida birinchisini qo‘shing — tovarlarni guruhlash va saralash mumkin bo‘ladi.'}
                 </div>
               ) : (
                 categories.map((c) => {
@@ -647,7 +646,7 @@ export default function ProductsPage() {
           size="sm"
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={() => setEditingCategory(null)}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setEditingCategory(null)}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="submit" form="page-form" variant="primary" disabled={editCatLoading}>
@@ -658,29 +657,17 @@ export default function ProductsPage() {
       onSubmitShortcut={() => (document.getElementById('page-form') as HTMLFormElement | null)?.requestSubmit()}
     >
           <form id="page-form" onSubmit={handleSaveEditCategory} style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, marginBottom: '4px' }}>
-                {isRu ? 'Название категории (узбекский) *' : 'Kategoriya nomi (o‘zbekcha) *'}
-              </label>
-              <input
-                type="text"
-                required
-                value={editCatNameUz}
-                onChange={(e) => setEditCatNameUz(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-              />
-            </div>
-            <div>
-              <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, marginBottom: '4px' }}>
-                {isRu ? 'Название категории (русский)' : 'Kategoriya nomi (ruscha)'}
-              </label>
-              <input
-                type="text"
-                value={editCatNameRu}
-                onChange={(e) => setEditCatNameRu(e.target.value)}
-                style={{ width: '100%', padding: '8px 12px', fontSize: 'var(--text-sm)', borderRadius: 'var(--radius-md)', border: '1px solid var(--color-border)', outline: 'none' }}
-              />
-            </div>
+            <Input
+              label={isRu ? 'Название категории (узбекский) *' : 'Kategoriya nomi (o‘zbekcha) *'}
+              required
+              value={editCatNameUz}
+              onChange={(e) => setEditCatNameUz(e.target.value)}
+            />
+            <Input
+              label={isRu ? 'Название категории (русский)' : 'Kategoriya nomi (ruscha)'}
+              value={editCatNameRu}
+              onChange={(e) => setEditCatNameRu(e.target.value)}
+            />
       </form>
     </Modal>
       )}
@@ -690,11 +677,11 @@ export default function ProductsPage() {
         <Modal icon={<Trash2 size={20} />} tone="error"
           isOpen={Boolean(deletingCategory)}
           onClose={() => setDeletingCategory(null)}
-          title={isRu ? 'Удалить категорию?' : 'Kategoriyani o‘chirishni tasdiqlaysizmi?'}
+          title={isRu ? 'Удалить категорию?' : 'Kategoriya o‘chirilsinmi?'}
           size="sm"
           footer={
             <>
-              <Button variant="secondary" onClick={() => setDeletingCategory(null)} disabled={deleteCatLoading}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeletingCategory(null)} disabled={deleteCatLoading}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button

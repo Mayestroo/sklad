@@ -154,6 +154,10 @@ lives in `src/components/ui/filters/` (FilterBar), `src/components/ui/stats/` (S
 - Actions always go in `footer` (pinned, visible however long the content). Forms: `<form id="…">` in the body, the
   submit button `type="submit" form="<id>"` in the footer, `onSubmitShortcut` → `requestSubmit()`.
 - Order in the footer: Cancel (secondary) first, the action last (primary, or danger when it destroys).
+- Mark the footer Cancel / Back button `data-dialog-cancel`: it then closes like Esc and asks first after an edit.
+  Never mark a button that does something (Storno, delete, "cancel document"). Never add an own
+  "close without saving?" `confirm()` on top — the dialog already asks.
+- Small forms (≤ 4 fields) are a `Modal`, not a `Drawer`. Units go inside the field (suffix), not next to it.
 - Confirmations: `useConfirm` (ADR 0021). A destructive confirmation focuses Cancel first.
 - Title says the task ("Yangi mijoz", "To'lov qabul qilish — INV-…") in sentence case (not "Yangi Tovar Qo'shish"),
   without "(Kirim)"-style tags; `description` for one line on what changes.

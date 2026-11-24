@@ -131,7 +131,7 @@ export const CreateWarehouseDrawer: React.FC<CreateWarehouseDrawerProps> = ({
       onSubmitShortcut={handleSubmit}
       footer={
         <>
-          <Button
+          <Button data-dialog-cancel
             type="button"
             variant="secondary"
             onClick={() => {

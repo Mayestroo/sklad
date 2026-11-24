@@ -407,7 +407,7 @@ export default function NewProductPage() {
       <Modal icon={<Tag size={20} />} isOpen={showCategoryModal} onClose={() => setShowCategoryModal(false)} title={isRu ? 'Новая категория' : 'Yangi kategoriya'} size="sm"
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={() => setShowCategoryModal(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setShowCategoryModal(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
           <Button type="submit" form="page-form" disabled={categoryLoading}>{isRu ? 'Создать' : 'Yaratish'}</Button>
         </>
       }

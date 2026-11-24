@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Select';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { Drawer } from '@/components/ui/Drawer';
+import { Modal } from '@/components/ui/Modal';
 import { Badge } from '@/components/ui/Badge';
 import { toast } from '@/context/ToastContext';
 import { Plus, Tag, Edit2, Check, Trash2, X } from 'lucide-react';
@@ -559,8 +559,9 @@ export default function PricesPage() {
       </div>
 
       {/* Create Price List Side Drawer Panel */}
-      <Drawer
+      <Modal
         isOpen={showCreatePL}
+        onSubmitShortcut={() => { if (newPLNameUz && !createLoading) void handleCreatePL(); }}
         onClose={() => setShowCreatePL(false)}
         title={isRu ? 'Новый прайс-лист' : 'Yangi narx jadvali'}
         description={isRu ? 'Создание новой категории цен (розница, опт, дилерские)' : 'Yangi narx toifasini yaratish (chakana, ulgurji, dilerlik)'}
@@ -568,7 +569,7 @@ export default function PricesPage() {
         size="md"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', width: '100%' }}>
-            <Button id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>
+            <Button data-dialog-cancel id="cancel-pl-btn" variant="secondary" onClick={() => setShowCreatePL(false)} disabled={createLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button id="submit-pl-btn" onClick={handleCreatePL} disabled={!newPLNameUz} loading={createLoading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
@@ -608,11 +609,12 @@ export default function PricesPage() {
             description={isRu ? 'Подставляется в продажу, если у клиента нет своего прайс-листа.' : 'Mijozning o‘z jadvali bo‘lmasa, sotuvga shu qo‘yiladi.'}
           />
         </div>
-      </Drawer>
+      </Modal>
 
       {/* Edit Price List Side Drawer Panel */}
-      <Drawer
+      <Modal
         isOpen={showEditPL}
+        onSubmitShortcut={() => { if (editPLNameUz && !editLoading) void handleSaveEditPL(); }}
         onClose={() => setShowEditPL(false)}
         title={isRu ? 'Редактирование прайс-листа' : 'Narx jadvalini tahrirlash'}
         description={isRu ? 'Изменение параметров прайс-листа' : 'Narx jadvali parametrlarini o\'zgartirish'}
@@ -620,7 +622,7 @@ export default function PricesPage() {
         size="md"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', width: '100%' }}>
-            <Button variant="secondary" onClick={() => setShowEditPL(false)} disabled={editLoading}>
+            <Button data-dialog-cancel variant="secondary" onClick={() => setShowEditPL(false)} disabled={editLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button onClick={handleSaveEditPL} disabled={!editPLNameUz} loading={editLoading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
@@ -660,7 +662,7 @@ export default function PricesPage() {
             description={isRu ? 'Подставляется в продажу, если у клиента нет своего прайс-листа.' : 'Mijozning o‘z jadvali bo‘lmasa, sotuvga shu qo‘yiladi.'}
           />
         </div>
-      </Drawer>
+      </Modal>
 
     </div>
   );

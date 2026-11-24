@@ -171,7 +171,7 @@ export function PaySalesInvoiceModal({
       title={isRu ? `Принять оплату — ${invoice.invoiceNumber}` : `To‘lov qabul qilish — ${invoice.invoiceNumber}`}
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={handleClose} disabled={loading}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={handleClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="submit" form="pay-sales-invoice-modal-form" disabled={loading} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>

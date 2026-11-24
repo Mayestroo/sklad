@@ -451,7 +451,7 @@ export default function SalesPage() {
           }
           footer={
             <>
-              <Button variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeletingInvoice(null)} disabled={deleteLoading}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button variant="danger" onClick={handleDeleteInvoice} loading={deleteLoading} loadingText={isRu ? 'Удаление...' : 'O‘chirilmoqda...'}>

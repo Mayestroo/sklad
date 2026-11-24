@@ -200,7 +200,7 @@ export function PartialDispatchModal({
       }
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={submitting}>
+          <Button data-dialog-cancel variant="secondary" onClick={onClose} disabled={submitting}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button variant="primary" type="submit" form="partial-dispatch-modal-form" disabled={submitting || totalDispatchCount <= 0}>

@@ -54,10 +54,22 @@ export function DialogHeader({
   );
 }
 
-/** Pinned action bar. With a submit shortcut, a quiet "Ctrl + Enter" hint sits on the left (desktop only). */
-export function DialogFooter({ children, shortcut, isRu }: { children: React.ReactNode; shortcut?: boolean; isRu: boolean }) {
+/**
+ * Pinned action bar. With a submit shortcut, a quiet "Ctrl + Enter" hint sits on the left (desktop only).
+ * A button marked `data-dialog-cancel` closes like Esc / ✕: after an edit it asks first (onCancel).
+ */
+export function DialogFooter({ children, shortcut, isRu, onCancel }: { children: React.ReactNode; shortcut?: boolean; isRu: boolean; onCancel: () => void }) {
   return (
-    <div className="dlg-footer app-modal-footer">
+    <div
+      className="dlg-footer app-modal-footer"
+      onClickCapture={(e) => {
+        const target = e.target instanceof Element ? e.target.closest('[data-dialog-cancel]') : null;
+        if (!target || (target as HTMLButtonElement).disabled) return;
+        e.preventDefault();
+        e.stopPropagation();
+        onCancel();
+      }}
+    >
       {shortcut && (
         <span className="dlg-hint">
           <kbd className="app-kbd">Ctrl</kbd>+<kbd className="app-kbd">Enter</kbd>

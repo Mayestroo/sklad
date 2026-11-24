@@ -216,7 +216,7 @@ export const CreateCounterpartyDrawer: React.FC<CreateCounterpartyDrawerProps> =
       onSubmitShortcut={handleSubmit}
       footer={
         <>
-          <Button
+          <Button data-dialog-cancel
             type="button"
             variant="secondary"
             onClick={() => {

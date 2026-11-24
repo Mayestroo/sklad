@@ -669,7 +669,7 @@ export default function SalesReturnsPage() {
         size="lg"
         footer={
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 'var(--space-3)', width: '100%' }}>
-            <Button variant="secondary" onClick={() => setShowCreateModal(false)} disabled={formLoading}>
+            <Button data-dialog-cancel variant="secondary" onClick={() => setShowCreateModal(false)} disabled={formLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button
@@ -984,7 +984,7 @@ export default function SalesReturnsPage() {
         size="sm"
         footer={
           <>
-            <Button type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
+            <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setDeleteConfirmReturn(null)} disabled={deleteLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button type="button" variant="danger" onClick={handleDeleteReturn} loading={deleteLoading} loadingText={isRu ? 'Удаление…' : 'O‘chirilmoqda…'}>

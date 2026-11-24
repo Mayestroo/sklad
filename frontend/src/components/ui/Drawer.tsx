@@ -62,7 +62,7 @@ export const Drawer: React.FC<DrawerProps> = ({ isOpen, onClose, title, descript
         <DialogHeader titleId={titleId} descId={descId} title={title} description={description} icon={icon} tone={tone} badge={badge} closeLabel={closeLabel} onClose={requestClose} />
         <div className="dlg-body">{children}</div>
         {footer && !asking && (
-          <DialogFooter shortcut={Boolean(onSubmitShortcut)} isRu={isRu}>
+          <DialogFooter shortcut={Boolean(onSubmitShortcut)} isRu={isRu} onCancel={requestClose}>
             {footer}
           </DialogFooter>
         )}

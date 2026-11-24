@@ -830,7 +830,7 @@ export default function FinancePage() {
           onClose={() => setEditingTx(null)}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setEditingTx(null)} disabled={savingEdit}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setEditingTx(null)} disabled={savingEdit}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button variant="primary" onClick={handleSaveEdit} disabled={savingEdit}>
@@ -880,7 +880,7 @@ export default function FinancePage() {
           onClose={() => setStornoTx(null)}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setStornoTx(null)} disabled={stornoLoading}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setStornoTx(null)} disabled={stornoLoading}>
                 {isRu ? 'Назад' : 'Orqaga'}
               </Button>
               <Button
@@ -955,7 +955,7 @@ export default function FinancePage() {
           }}
           footer={
             <>
-              <Button
+              <Button data-dialog-cancel
                 variant="secondary"
                 onClick={() => setDeletingTx(null)}
                 disabled={deleteLoading}
@@ -1551,7 +1551,7 @@ function FinanceTransactionDrawer({
       onSubmitShortcut={() => handleSubmit()}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={loading}>
+          <Button data-dialog-cancel variant="secondary" onClick={onClose} disabled={loading}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button
@@ -1649,14 +1649,7 @@ function FinanceTransactionDrawer({
 
         {/* Summa */}
         <div>
-          <label
-            style={{
-              fontSize: 'var(--text-sm)',
-              fontWeight: 'var(--font-medium)',
-              display: 'block',
-              marginBottom: '6px',
-            }}
-          >
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
             {isRu ? 'Сумма' : 'Summa'} ({fromAccount?.currency || currency}) *
           </label>
           <MoneyInput
@@ -1673,7 +1666,7 @@ function FinanceTransactionDrawer({
 
         {!isTransferOrExchange && fromAccount?.currency === 'USD' && (
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
               {isRu ? 'Курс (1 USD = UZS) *' : 'Kurs (1 USD = UZS) *'}
             </label>
             <MoneyInput
@@ -1689,7 +1682,7 @@ function FinanceTransactionDrawer({
 
         {isTransferOrExchange && !isMultiCurrency && fromAccount?.currency === 'USD' && (
           <div>
-            <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+            <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
               {isRu ? 'Учётный курс (1 USD = UZS) *' : 'Hisob kursi (1 USD = UZS) *'}
             </label>
             <MoneyInput
@@ -1702,8 +1695,8 @@ function FinanceTransactionDrawer({
           </div>
         )}
 
-        {/* Multi-currency Exchange Box */}
-        {isMultiCurrency && (
+        {/* Multi-currency Exchange Box (transfers only: income/expense do not send it) */}
+        {isTransferOrExchange && isMultiCurrency && (
           <div
             style={{
               padding: '12px 14px',
@@ -1720,7 +1713,7 @@ function FinanceTransactionDrawer({
             </span>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
               <div>
-                <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
                   {isRu ? 'Курс (1 USD = UZS)' : 'Kurs (1 USD = UZS)'}
                 </label>
                 <MoneyInput
@@ -1735,7 +1728,7 @@ function FinanceTransactionDrawer({
                 />
               </div>
               <div>
-                <label style={{ fontSize: 'var(--text-xs)', display: 'block', marginBottom: '4px' }}>
+                <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
                   {isRu ? 'Итоговая сумма' : 'Qabul qilinadigan summa'} ({toAccount?.currency})
                 </label>
                 <MoneyInput
@@ -1764,7 +1757,7 @@ function FinanceTransactionDrawer({
             <Select
               label={isRu ? 'Контрагент' : 'Kontragent'}
               options={[
-                { value: '', label: isRu ? '— Не выбран (Прямой доход/расход) —' : '— Tanlanmagan —' },
+                { value: '', label: isRu ? 'Не выбран (прямой доход/расход)' : 'Tanlanmagan' },
                 ...counterparties.map((cp) => ({
                   value: cp.id,
                   label: cp.name,
@@ -1838,7 +1831,7 @@ function FinanceTransactionDrawer({
             <Select
               label={isRu ? 'Категория платежа' : 'To‘lov toifasi / sababi'}
               options={[
-                { value: '', label: isRu ? '— Выберите категорию —' : '— Toifani tanlang —' },
+                { value: '', label: isRu ? 'Выберите категорию' : 'Toifani tanlang' },
                 ...txTypes
                   .filter((t) => (mode === 'income' ? t.direction === 'INCOME' : t.direction === 'EXPENSE'))
                   .map((t) => ({
@@ -1854,14 +1847,7 @@ function FinanceTransactionDrawer({
 
         {/* Izoh */}
         <div>
-          <label
-            style={{
-              fontSize: 'var(--text-sm)',
-              fontWeight: 'var(--font-medium)',
-              display: 'block',
-              marginBottom: '6px',
-            }}
-          >
+          <label style={{ fontSize: 'var(--text-xs)', fontWeight: 'var(--font-medium)', color: 'var(--color-text-secondary)', display: 'block', marginBottom: 4 }}>
             {isRu ? 'Примечание (необязательно)' : 'Izoh (ixtiyoriy)'}
           </label>
           <Input

@@ -308,7 +308,7 @@ export function ServiceActDrawer({
             <strong className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>{money(grandTotal)}</strong>
           </span>
           <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
-            <Button type="button" variant="outline" onClick={onClose} disabled={loading}>
+            <Button data-dialog-cancel type="button" variant="outline" onClick={onClose} disabled={loading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button type="submit" form="service-act-form" variant="primary" loading={loading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>

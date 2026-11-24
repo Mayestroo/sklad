@@ -114,7 +114,7 @@ function PaletteBody({ onClose }: { onClose: () => void }) {
           setActive(0);
         }}
         onKeyDown={onKeyDown}
-        style={{ width: '100%', height: 44, fontSize: 'var(--text-base)' }}
+        style={{ width: '100%', height: 44, padding: '0 14px', fontSize: 'var(--text-base)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)', background: 'var(--color-bg-primary)', color: 'var(--color-text-primary)' }}
       />
       <ul id={listId} role="listbox" aria-label={tUx('goTo')} className="app-palette-list" style={{ marginTop: 'var(--space-2)' }}>
         {results.length === 0 && (

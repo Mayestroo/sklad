@@ -1013,7 +1013,7 @@ export default function OpeningBalancesPage() {
       <Modal icon={<FilePlus2 size={20} />} isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowNewDocModal(false)}>
+            <Button data-dialog-cancel variant="secondary" onClick={() => setShowNewDocModal(false)}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button variant="primary" onClick={handleCreateDocument} disabled={actionLoading}>
@@ -1045,7 +1045,7 @@ export default function OpeningBalancesPage() {
       <Modal icon={<FileSpreadsheet size={20} />} isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}
         footer={
           <>
-            <Button variant="secondary" onClick={closeImportModal}>
+            <Button data-dialog-cancel variant="secondary" onClick={closeImportModal}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             {importSummary?.canCommit ? (
@@ -1146,7 +1146,7 @@ export default function OpeningBalancesPage() {
       <Modal icon={<LockOpen size={20} />} tone="warning" isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}
         footer={
           <>
-            <Button variant="secondary" onClick={() => setShowUnpostModal(false)}>
+            <Button data-dialog-cancel variant="secondary" onClick={() => setShowUnpostModal(false)}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button variant="danger" onClick={handleUnpost} disabled={actionLoading}>
@@ -1695,7 +1695,7 @@ function NewFixedAssetModal({
     <Modal icon={<Building2 size={20} />} isOpen title={isRu ? 'Новое основное средство' : 'Yangi asosiy vosita'} onClose={onClose}
       footer={
         <>
-          <Button variant="secondary" onClick={onClose}>
+          <Button data-dialog-cancel variant="secondary" onClick={onClose}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button variant="primary" onClick={submit} disabled={saving}>

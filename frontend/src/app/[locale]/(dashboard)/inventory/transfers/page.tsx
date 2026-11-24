@@ -296,7 +296,7 @@ export default function StockTransfersPage() {
       <Modal icon={<ArrowLeftRight size={20} />} description={isRu ? 'Товары переходят с одного склада на другой' : 'Tovarlar bir ombordan boshqasiga o‘tkaziladi'} isOpen={modalOpen} onClose={() => setModalOpen(false)} title={isRu ? 'Новое перемещение между складами' : 'Yangi omborlararo o‘tkazma'}
       footer={
         <>
-          <Button type="button" variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+          <Button data-dialog-cancel type="button" variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
           <Button type="submit" form="page-form" variant="primary" disabled={createLoading}>{createLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать перемещение' : 'O‘tkazma yaratish'}</Button>
         </>
       }
@@ -406,7 +406,7 @@ export default function StockTransfersPage() {
           title={isRu ? 'Удалить перемещение?' : "O'tkazmani o'chirish?"}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setDeleteConfirmTransfer(null)} disabled={deleteLoading}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeleteConfirmTransfer(null)} disabled={deleteLoading}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button variant="danger"

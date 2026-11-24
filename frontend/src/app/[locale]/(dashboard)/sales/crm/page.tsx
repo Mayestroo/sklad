@@ -288,7 +288,7 @@ export default function CrmKanbanPage() {
         onSubmitShortcut={() => void handleSave()}
         footer={
           <>
-            <Button type="button" variant="outline" onClick={() => setFormOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button data-dialog-cancel type="button" variant="outline" onClick={() => setFormOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
             <Button type="submit" form="crm-deal-form" variant="primary" loading={saving} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
               {editingId ? (isRu ? 'Сохранить' : 'Saqlash') : isRu ? 'Создать сделку' : 'Bitim yaratish'}
             </Button>

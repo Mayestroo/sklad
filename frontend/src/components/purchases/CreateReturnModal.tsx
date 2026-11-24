@@ -180,7 +180,7 @@ export function CreateReturnModal({
             <strong className="tabular-nums" style={{ color: 'var(--color-text-primary)' }}>{formatCurrency(returnTotal, locale, receipt.currency)}</strong>
           </span>
           <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-            <Button variant="outline" onClick={onClose} disabled={loading}>
+            <Button data-dialog-cancel variant="outline" onClick={onClose} disabled={loading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button variant="secondary" onClick={() => void handleSubmit('DRAFT')} disabled={loading}>

@@ -72,7 +72,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, descriptio
         <DialogHeader titleId={titleId} descId={descId} title={title} description={description} icon={icon} tone={tone} badge={badge} closeLabel={closeLabel} onClose={requestClose} />
         <div className="dlg-body">{children}</div>
         {footer && !asking && (
-          <DialogFooter shortcut={Boolean(onSubmitShortcut)} isRu={isRu}>
+          <DialogFooter shortcut={Boolean(onSubmitShortcut)} isRu={isRu} onCancel={requestClose}>
             {footer}
           </DialogFooter>
         )}

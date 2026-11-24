@@ -1787,3 +1787,17 @@ input.auth-input:not([type='checkbox']):not([type='radio']) {
   .dlg-footer { padding: 12px 16px; }
   .app-modal.dlg-surface { border: none; }
 }
+
+/* The dialog surface itself takes focus only when it has no controls: no ring around the whole dialog. */
+.dlg-surface:focus,
+.dlg-surface:focus-visible {
+  outline: none !important;
+  box-shadow: none;
+}
+.app-modal.dlg-surface:focus-visible {
+  box-shadow: 0 24px 48px -12px rgba(15, 23, 42, 0.28), 0 2px 6px rgba(15, 23, 42, 0.08);
+}
+
+@media (max-width: 640px) {
+  .cat-new-row { grid-template-columns: 1fr !important; }
+}

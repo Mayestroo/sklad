@@ -151,14 +151,14 @@ export default function SuperAdminAnnouncementsPage() {
         )}
       </div>
 
-      <Modal icon={<Megaphone size={20} />}
+      <Modal onSubmitShortcut={() => (document.getElementById('sa-announcement') as HTMLFormElement | null)?.requestSubmit()} icon={<Megaphone size={20} />}
         isOpen={modalOpen}
         onClose={() => setModalOpen(false)}
         title={isRu ? 'Новое объявление' : 'Yangi e’lon'}
         size="lg"
         footer={
           <>
-            <Button variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button data-dialog-cancel variant="outline" onClick={() => setModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
             <Button variant="primary" type="submit" form="sa-announcement" loading={submitLoading} loadingText={isRu ? 'Публикация…' : 'E’lon qilinmoqda…'}>
               {isRu ? 'Опубликовать для всех' : 'Hammaga e’lon qilish'}
             </Button>

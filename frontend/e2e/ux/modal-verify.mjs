@@ -198,6 +198,28 @@ for (const theme of ['light', 'dark']) {
   await page.context().close();
 }
 
+// 7. Recipe dialog (and every footer Cancel): after an edit Cancel asks once, inside the dialog — no second
+//    confirmation on top; "close" then really closes.
+for (const locale of ['uz', 'ru']) {
+  const isRu = locale === 'ru';
+  const page = await newPage(locale);
+  await go(page, `/${locale}/production?tab=recipes`);
+  const open = page.getByRole('button', { name: isRu ? 'Новая рецептура' : 'Yangi retseptura' }).first();
+  if (!(await open.count())) { log(false, `${locale} recipe opener found`); await page.context().close(); continue; }
+  await open.click();
+  await page.waitForTimeout(500);
+  await page.locator('#recipe-note').fill('UX');
+  await page.locator(DLG).last().getByRole('button', { name: isRu ? 'Отмена' : 'Bekor qilish', exact: true }).click();
+  await page.waitForTimeout(400);
+  const prompts = await page.locator('.app-dialog-discard').count();
+  const alerts = await page.locator('[role="alertdialog"]').count();
+  log(prompts === 1 && alerts === 0, `${locale} recipe Cancel after edit asks once, no second dialog`, `prompt=${prompts} alertdialog=${alerts}`);
+  await page.locator('.app-dialog-discard').getByRole('button', { name: isRu ? 'Закрыть' : 'Yopish', exact: true }).click();
+  await page.waitForTimeout(400);
+  log((await page.locator(DLG).count()) === 0 && (await page.locator('[role="alertdialog"]').count()) === 0, `${locale} recipe "close" closes at once`);
+  await page.context().close();
+}
+
 console.log(fails ? `\n${fails} FAILED` : '\nALL PASS');
 await browser.close();
 process.exit(fails ? 1 : 0);

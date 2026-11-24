@@ -437,14 +437,14 @@ export default function SuperAdminTenantsPage() {
         )}
       </Card>
 
-      <Modal icon={<Building2 size={20} />}
+      <Modal onSubmitShortcut={() => (document.getElementById('sa-create-tenant') as HTMLFormElement | null)?.requestSubmit()} icon={<Building2 size={20} />}
         isOpen={createModalOpen}
         onClose={() => setCreateModalOpen(false)}
         title={isRu ? 'Новая компания' : 'Yangi korxona'}
         size="lg"
         footer={
           <>
-            <Button variant="outline" onClick={() => setCreateModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button data-dialog-cancel variant="outline" onClick={() => setCreateModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
             <Button variant="primary" type="submit" form="sa-create-tenant" loading={createLoading} loadingText={isRu ? 'Создание…' : 'Yaratilmoqda…'}>
               {isRu ? 'Создать компанию' : 'Korxonani yaratish'}
             </Button>
@@ -534,14 +534,14 @@ export default function SuperAdminTenantsPage() {
         )}
       </Modal>
 
-      <Modal icon={<Building2 size={20} />}
+      <Modal onSubmitShortcut={() => (document.getElementById('sa-edit-tenant') as HTMLFormElement | null)?.requestSubmit()} icon={<Building2 size={20} />}
         isOpen={editModalOpen && !!selectedTenant}
         onClose={() => setEditModalOpen(false)}
         title={selectedTenant ? (typeof selectedTenant.name === 'string' ? selectedTenant.name : selectedTenant.name?.[locale] || selectedTenant.name?.uz || selectedTenant.slug) : isRu ? 'Компания' : 'Korxona'}
         size="md"
         footer={
           <>
-            <Button variant="outline" onClick={() => setEditModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+            <Button data-dialog-cancel variant="outline" onClick={() => setEditModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
             <Button variant="primary" type="submit" form="sa-edit-tenant" loading={editLoading} loadingText={isRu ? 'Сохранение…' : 'Saqlanmoqda…'}>
               {isRu ? 'Сохранить' : 'Saqlash'}
             </Button>

@@ -2,7 +2,7 @@
 
 import { QuantityInput } from '@/components/ui/QuantityInput';
 import { MoneyInput } from '@/components/ui/MoneyInput';
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocale } from 'next-intl';
 import { useAuth } from '@/context/AuthContext';
 import { apiFetch } from '@/lib/api';
@@ -18,7 +18,6 @@ import { PackagePlus, AlertCircle, CheckCircle2, Plus, Tag, Ruler } from 'lucide
 import type { Category } from '@shared/types';
 import { editedProductName } from '@/lib/product-name';
 import { Checkbox } from '@/components/ui/Checkbox';
-import { useConfirm } from '@/context/ConfirmContext';
 import { unitLabel } from '@/lib/units';
 import { productTypeLabel } from '@/lib/product-types';
 import { unitOptionsFor } from '@/lib/production-recipe';
@@ -85,7 +84,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   allowedTypes,
   onSuccess,
 }) => {
-  const confirm = useConfirm();
   const locale = useLocale() as 'uz' | 'ru';
   const isRu = locale === 'ru';
   const { token, company } = useAuth();
@@ -97,7 +95,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   const [isSemiFinished, setIsSemiFinished] = useState(false);
   const [unitRows, setUnitRows] = useState<UnitRow[]>([]);
   const [duplicates, setDuplicates] = useState<string[]>([]);
-  const dirty = useRef(false);
   const isFinished = itemType === 'FINISHED_PRODUCT';
   const [name, setName] = useState('');
   const [sku, setSku] = useState('');
@@ -183,13 +180,11 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         setIsSemiFinished(Boolean(productToEdit.isSemiFinished));
         setUnitRows((productToEdit.units ?? []).map((u) => ({ key: ++unitRowKey, name: u.name, factor: String(Number(u.factor)) })));
         setError(null);
-        dirty.current = false;
 
       } else {
         setItemType(initialType || 'PRODUCT');
         setIsSemiFinished(false);
         setUnitRows([]);
-        dirty.current = false;
         setCostPriceCurrency('');
         setCostPriceExchangeRate('');
         setSalePriceCurrency(salesDefault ?? '');
@@ -343,7 +338,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
 
       // TZ 3.3: a finished product gets stock only from production.
       const savedQuantity = isFinished ? 0 : numQty;
-      dirty.current = false;
       resetForm();
       if (onSuccess) onSuccess(res, savedQuantity);
       onClose();
@@ -371,21 +365,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
     setUnitRows([]);
     setDuplicates([]);
     setError(null);
-    dirty.current = false;
   };
 
-  /** TZ 11.5: unsaved input asks before the drawer closes. */
-  const requestClose = async () => {
-    if (dirty.current) {
-      const ok = await confirm({
-        title: isRu ? 'Закрыть без сохранения?' : 'Saqlamasdan yopilsinmi?',
-        description: isRu ? 'Введённые данные будут потеряны.' : 'Kiritilgan ma’lumotlar yo‘qoladi.',
-        variant: 'warning',
-        confirmText: isRu ? 'Закрыть' : 'Yopish',
-        cancelText: isRu ? 'Продолжить ввод' : 'Davom etish',
-      });
-      if (!ok) return;
-    }
+  /** TZ 11.5: the drawer itself asks before unsaved input is lost (backdrop, Esc, ✕, Cancel). */
+  const requestClose = () => {
     resetForm();
     onClose();
   };
@@ -488,7 +471,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
   return (
     <Drawer
       isOpen={isOpen}
-      onClose={() => void requestClose()}
+      onClose={() => requestClose()}
       title={getDrawerTitle()}
       description={getDrawerDescription()}
       icon={<PackagePlus size={20} />}
@@ -496,10 +479,10 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       onSubmitShortcut={handleSubmit}
       footer={
         <>
-          <Button
+          <Button data-dialog-cancel
             type="button"
             variant="secondary"
-            onClick={() => void requestClose()}
+            onClick={() => requestClose()}
             disabled={loading}
           >
             {isRu ? 'Отмена' : 'Bekor qilish'}
@@ -545,7 +528,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
       <form
         onSubmit={handleSubmit}
         onInput={() => {
-          dirty.current = true;
         }}
         style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}
       >
@@ -565,7 +547,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
                   aria-checked={active}
                   disabled={lockType}
                   onClick={() => {
-                    dirty.current = true;
                     setItemType(type);
                   }}
                   style={{
@@ -597,7 +578,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
                 description={isRu ? 'Используется как сырьё в других рецептурах' : 'Boshqa retseptalarda xomashyo sifatida ishlatiladi'}
                 checked={isSemiFinished}
                 onChange={(event) => {
-                  dirty.current = true;
                   setIsSemiFinished(event.target.checked);
                 }}
               />
@@ -829,7 +809,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
                   aria-label={isRu ? 'Удалить единицу' : 'Birlikni o‘chirish'}
                   title={isRu ? 'Удалить единицу' : 'Birlikni o‘chirish'}
                   onClick={() => {
-                    dirty.current = true;
                     setUnitRows((rows) => rows.filter((r) => r.key !== row.key));
                   }}
                   style={{ width: 40, height: 40, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', border: 'none', background: 'none', color: 'var(--color-error-700)', cursor: 'pointer' }}
@@ -843,7 +822,6 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
               variant="outline"
               size="sm"
               onClick={() => {
-                dirty.current = true;
                 setUnitRows((rows) => [...rows, { key: ++unitRowKey, name: '', factor: '' }]);
               }}
             >
@@ -860,7 +838,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         size="sm"
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={() => setShowNewCategoryModal(false)}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setShowNewCategoryModal(false)}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="submit" form="create-product-drawer-form" disabled={creatingCategory}>
@@ -897,7 +875,7 @@ export const CreateProductDrawer: React.FC<CreateProductDrawerProps> = ({
         size="sm"
       footer={
         <>
-          <Button
+          <Button data-dialog-cancel
             type="button"
             variant="secondary"
             onClick={() => {

@@ -247,10 +247,10 @@ export default function BillingSettingsPage() {
         onSubmitShortcut={checkoutResult ? undefined : () => void handleExecuteCheckout()}
         footer={
           checkoutResult ? (
-            <Button variant="outline" onClick={() => setCheckoutModalOpen(false)}>{isRu ? 'Закрыть' : 'Yopish'}</Button>
+            <Button data-dialog-cancel variant="outline" onClick={() => setCheckoutModalOpen(false)}>{isRu ? 'Закрыть' : 'Yopish'}</Button>
           ) : (
             <>
-              <Button variant="outline" onClick={() => setCheckoutModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
+              <Button data-dialog-cancel variant="outline" onClick={() => setCheckoutModalOpen(false)}>{isRu ? 'Отмена' : 'Bekor qilish'}</Button>
               <Button variant="primary" onClick={() => void handleExecuteCheckout()} loading={checkoutLoading} loadingText={isRu ? 'Формируется…' : 'Tayyorlanmoqda…'}>
                 {isRu ? 'Сформировать счёт' : 'To‘lov hisobini tayyorlash'}
               </Button>

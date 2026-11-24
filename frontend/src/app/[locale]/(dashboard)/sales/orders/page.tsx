@@ -532,7 +532,7 @@ export default function SalesOrdersPage() {
             ]}
           />
           {nextStep(preview) && (
-            <Button style={{ width: '100%' }} disabled={updatingOrderId === preview.id} onClick={() => void runStatus(preview, nextStep(preview)!.status)}>
+            <Button variant="secondary" style={{ width: '100%' }} disabled={updatingOrderId === preview.id} onClick={() => void runStatus(preview, nextStep(preview)!.status)}>
               {isRu ? nextStep(preview)!.labelRu : nextStep(preview)!.labelUz}
             </Button>
           )}
@@ -555,7 +555,7 @@ export default function SalesOrdersPage() {
         size="sm"
         footer={
           <>
-            <Button type="button" variant="secondary" onClick={() => setDeleteConfirmOrder(null)} disabled={deleteLoading}>
+            <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setDeleteConfirmOrder(null)} disabled={deleteLoading}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button type="button" variant="danger" onClick={handleDeleteOrder} loading={deleteLoading} loadingText={isRu ? 'Удаление…' : 'O‘chirilmoqda…'}>

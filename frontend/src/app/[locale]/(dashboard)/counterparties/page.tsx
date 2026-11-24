@@ -768,7 +768,7 @@ export default function CounterpartiesPage() {
           title={folderModalMode === 'create' ? (isRu ? 'Создание папки' : 'Yangi papka yaratish') : (isRu ? 'Редактирование папки' : 'Papkani tahrirlash')}
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={() => setIsFolderModalOpen(false)} disabled={folderSubmitting}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setIsFolderModalOpen(false)} disabled={folderSubmitting}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="submit" form="page-form" disabled={folderSubmitting}>
@@ -824,7 +824,7 @@ export default function CounterpartiesPage() {
         <Modal icon={<Trash2 size={20} />} tone="error" isOpen={true} onClose={() => setDeleteFolderId(null)} title={isRu ? 'Удаление папки' : 'Papkani o\'chirish'}
           footer={
             <>
-              <Button variant="secondary" onClick={() => setDeleteFolderId(null)} disabled={deleteSubmitting}>
+              <Button data-dialog-cancel variant="secondary" onClick={() => setDeleteFolderId(null)} disabled={deleteSubmitting}>
                 {isRu ? 'Отмена' : 'Bekor qilish'}
               </Button>
               <Button variant="danger" onClick={handleDeleteFolder} disabled={deleteSubmitting}>
@@ -851,7 +851,7 @@ export default function CounterpartiesPage() {
           title={isRu ? 'Удаление контрагента' : 'Kontragentni o\'chirish'}
           footer={
             <>
-              <Button
+              <Button data-dialog-cancel
                 variant="secondary"
                 onClick={() => setDeletingCounterparty(null)}
                 disabled={deleteCounterpartyLoading}
@@ -885,11 +885,11 @@ export default function CounterpartiesPage() {
         <Modal icon={<FolderInput size={20} />} isOpen={true} onClose={() => setMoveItem(null)} title={`${isRu ? 'Переместить:' : 'Papkaga ko\'chirish:'} ${moveItem.name}`}
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={() => setMoveItem(null)} disabled={moveSubmitting}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setMoveItem(null)} disabled={moveSubmitting}>
             {isRu ? 'Отмена' : 'Bekor qilish'}
           </Button>
           <Button type="submit" form="page-form-2" disabled={moveSubmitting}>
-            {moveSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Ko\'chirish' : 'Переместить')}
+            {moveSubmitting ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : (isRu ? 'Переместить' : 'Ko‘chirish')}
           </Button>
         </>
       }

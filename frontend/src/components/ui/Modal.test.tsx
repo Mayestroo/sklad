@@ -139,3 +139,43 @@ describe('Modal: focus returns to the opener', () => {
     await vi.waitFor(() => expect(document.activeElement).toBe(opener));
   });
 });
+
+describe('Modal: footer Cancel', () => {
+  it('asks after an edit instead of closing (in the same dialog, never a second one)', () => {
+    const onClose = vi.fn();
+    const own = vi.fn();
+    render(
+      <Modal
+        isOpen
+        onClose={onClose}
+        title="Yangi"
+        footer={
+          <button type="button" data-dialog-cancel onClick={own}>
+            Bekor qilish
+          </button>
+        }
+      >
+        <input aria-label="Nomi" />
+      </Modal>,
+    );
+    fireEvent.input(screen.getByLabelText('Nomi'), { target: { value: 'x' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Bekor qilish' }));
+    expect(onClose).not.toHaveBeenCalled();
+    expect(own).not.toHaveBeenCalled();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getAllByRole('dialog')).toHaveLength(1);
+    fireEvent.click(screen.getByRole('button', { name: 'Davom etish' }));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('closes at once when nothing was typed', () => {
+    const onClose = vi.fn();
+    render(
+      <Modal isOpen onClose={onClose} title="Yangi" footer={<button type="button" data-dialog-cancel>Bekor qilish</button>}>
+        <input aria-label="Nomi" />
+      </Modal>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Bekor qilish' }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});

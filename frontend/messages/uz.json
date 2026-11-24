@@ -461,7 +461,18 @@
     "avvalOmborYarating": "Ishlab chiqarishni rasmiylashtirish uchun avval ombor yarating:",
     "filiallarVaOmborlar": "Filiallar va omborlar",
     "hujjatlarBoshHolatIzohi": "Hujjat qaysi mahsulotdan qancha ishlab chiqarilganini qayd etadi: xomashyo ombordan chiqadi, tayyor mahsulot tannarx bilan kirim bo‘ladi. Avval mahsulot uchun retseptura kerak.",
-    "retsepturaBoshHolatIzohi": "Retseptura bir birlik tayyor mahsulotga qancha xomashyo ketishini aytadi. Undan keyin ishlab chiqarish hujjatini rasmiylashtirish mumkin."
+    "retsepturaBoshHolatIzohi": "Retseptura bir birlik tayyor mahsulotga qancha xomashyo ketishini aytadi. Undan keyin ishlab chiqarish hujjatini rasmiylashtirish mumkin.",
+    "recipeDialogDesc": "Tayyor mahsulot uchun qancha xomashyo ketishini kiriting — tannarx avtomatik hisoblanadi",
+    "recipeSectionProduct": "Mahsulot",
+    "recipeSectionMaterials": "Xomashyolar",
+    "recipeSectionCost": "Taxminiy tannarx",
+    "chiqadiganMiqdor": "Chiqadigan miqdor",
+    "outputHint": "Quyidagi sarf shu miqdor uchun",
+    "faolRetsepturaHint": "Faqat faol retsepturani ishlab chiqarish hujjatida tanlash mumkin",
+    "costHintShort": "Xomashyo kartalaridagi joriy narx bo‘yicha. Haqiqiy tannarx ishlab chiqarishda FIFO partiyalaridan olinadi.",
+    "docDialogDesc": "Qoralama sifatida saqlanadi — xomashyo ishlab chiqarish boshlanganda hisobdan chiqadi",
+    "docSectionWhat": "Nima ishlab chiqariladi",
+    "docSectionWhereWhen": "Qayerda va qachon"
   },
   "ux": {
     "openMenu": "Menyuni ochish",

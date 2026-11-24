@@ -296,7 +296,7 @@ export default function InventoryDocumentsPage() {
         <Modal icon={<ClipboardList size={20} />} description={isRu ? 'После оформления документ проводится и остаток склада меняется' : 'Rasmiylashtirilgach hujjat o‘tkaziladi va ombor qoldig‘i o‘zgaradi'} isOpen onClose={() => setShowModal(false)} title={tasks.find((t) => t.type === docType)?.title ?? (tIn('yangi_ombor_hujjati'))} size="lg"
           footer={
             <>
-              <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
+              <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setShowModal(false)}>
                 {tCommon('cancel')}
               </Button>
               <Button type="submit" form="invdoc-form" variant="primary" disabled={createLoading || items.length === 0}>

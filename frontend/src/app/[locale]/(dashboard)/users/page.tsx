@@ -320,7 +320,7 @@ export default function UsersPage() {
       <Modal icon={<UserPlus size={20} />} description={isRu ? 'Сотрудник войдёт по этому email и временному паролю' : 'Xodim shu e-pochta va vaqtinchalik parol bilan kiradi'} isOpen={Boolean(showModal)} onClose={() => setShowModal(false)} title={isRu ? 'Добавить нового сотрудника' : 'Yangi xodim biriktirish'} size="md"
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={() => setShowModal(false)}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setShowModal(false)}>
             {tCommon('cancel')}
           </Button>
           <Button type="submit" form="page-form" variant="primary" disabled={createLoading}>
@@ -420,7 +420,7 @@ export default function UsersPage() {
       <Modal icon={<UserCog size={20} />} isOpen={Boolean(editingUser)} onClose={() => setEditingUser(null)} title={isRu ? 'Редактировать сотрудника' : 'Xodimni tahrirlash'} size="md"
       footer={
         <>
-          <Button type="button" variant="secondary" onClick={() => setEditingUser(null)}>
+          <Button data-dialog-cancel type="button" variant="secondary" onClick={() => setEditingUser(null)}>
             {tCommon('cancel')}
           </Button>
           <Button type="submit" form="page-form-2" variant="primary" disabled={editLoading}>
