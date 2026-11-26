@@ -22,7 +22,10 @@ import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { Drawer } from '@/components/ui/Drawer';
 import { formatCurrency, formatDate, formatDateTime, LEDGER_CURRENCY } from '@/lib/utils';
-import { compactAmount, dayGroup, describeEntry, toCsv, type EffectKey, type PlainEntry } from '@/lib/accounting-plain';
+import { compactAmount, dayGroup, describeEntry, type EffectKey, type PlainEntry } from '@/lib/accounting-plain';
+import { buildPrintHtml, buildXlsx, safeFileName, type ReportDoc } from '@/lib/accounting-export';
+import { useAuth } from '@/context/AuthContext';
+import { useToast } from '@/context/ToastContext';
 import type { AccountingCardKey, AccountingHealth, AccountingIssue, Account, JournalEntry } from '@shared/types';
 import type { AccountingMode } from './AccountingShell';
 
@@ -257,7 +260,7 @@ export function describeForExport(entry: JournalEntry, cards: Record<AccountingC
   const plain = describeEntry(entry, cards);
   const text = t(`plain.${plain.key}`, { amount: formatCurrency(plain.amount, locale, LEDGER_CURRENCY) });
   const mark = plain.isCancelled ? ` (${t('movements.cancelled')})` : plain.isStorno ? ` (${t('movements.stornoOf')})` : '';
-  return [entry.entryDate.slice(0, 10), text + mark, plain.amount];
+  return [formatDate(entry.entryDate, locale), text + mark, plain.amount];
 }
 
 /** One health issue in plain words (TZ 11). */
@@ -327,26 +330,64 @@ export function StatusBanner({ health }: { health: AccountingHealth }) {
   );
 }
 
-/** "Hisobotni yuklash": an Excel-readable file of what is on screen, and print-to-PDF (TZ 7, 9). */
-export function ExportButtons({ filename, rows }: { filename: string; rows: () => Array<Array<string | number | null | undefined>> }) {
+/**
+ * "Hisobotni yuklash" (TZ 7, 9): a real Excel file of the report, and a print
+ * view that holds only the report (company, title, period, table) instead of
+ * the whole page. Both come from the same ReportDoc the page builds.
+ */
+export function ExportButtons({ filename, build }: { filename: string; build: () => Omit<ReportDoc, 'company' | 'footer'> }) {
   const t = useTranslations('acct');
-  const download = () => {
-    const blob = new Blob([toCsv(rows())], { type: 'text/csv;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${filename}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
+  const locale = useLocale();
+  const { company } = useAuth();
+  const toast = useToast();
+  const [busy, setBusy] = useState(false);
+  const companyName = !company ? undefined : typeof company.name === 'string' ? company.name : company.name?.[locale === 'ru' ? 'ru' : 'uz'] || company.name?.uz;
+  const fullDoc = (): ReportDoc => ({ ...build(), company: companyName, footer: t('export.generated', { time: formatDateTime(new Date(), locale) }) });
+
+  const excel = async () => {
+    setBusy(true);
+    try {
+      const data = await buildXlsx(fullDoc());
+      const blob = new Blob([data], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${safeFileName(filename)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast.error(t('export.failed'));
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const print = () => {
+    // A hidden frame with its own document: the browser prints the report only.
+    const frame = document.createElement('iframe');
+    frame.setAttribute('aria-hidden', 'true');
+    frame.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;visibility:hidden';
+    frame.srcdoc = buildPrintHtml(fullDoc(), locale);
+    frame.onload = () => {
+      const win = frame.contentWindow;
+      if (!win) return;
+      win.onafterprint = () => setTimeout(() => frame.remove(), 0);
+      win.focus();
+      win.print();
+      // Browsers without afterprint still get the frame removed.
+      setTimeout(() => frame.isConnected && frame.remove(), 60_000);
+    };
+    document.body.appendChild(frame);
+  };
+
   return (
     <div className="no-print" role="group" aria-label={t('export.button')} style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-      <Button variant="outline" size="sm" onClick={download}>
+      <Button variant="outline" size="sm" onClick={() => void excel()} loading={busy}>
         <Download size={14} aria-hidden /> {t('export.excel')}
       </Button>
-      <Button variant="outline" size="sm" onClick={() => window.print()}>
+      <Button variant="outline" size="sm" onClick={print}>
         <Printer size={14} aria-hidden /> {t('export.pdf')}
       </Button>
     </div>

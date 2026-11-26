@@ -1209,8 +1209,14 @@
     },
     "export": {
       "button": "Hisobotni yuklash",
-      "excel": "Excel",
-      "pdf": "PDF (chop etish)"
+      "excel": "Excel (.xlsx)",
+      "pdf": "Chop etish / PDF",
+      "generated": "Tuzildi: {time}",
+      "failed": "Faylni tayyorlab bo‘lmadi. Qayta urinib ko‘ring.",
+      "period": "Davr: {range}",
+      "asOf": "{date} holatiga",
+      "currency": "Summalar UZS da",
+      "entries": "{count} ta yozuv"
     },
     "units": {
       "thousand": "ming",

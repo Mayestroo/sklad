@@ -17,6 +17,8 @@ import { matchesSearch } from '@/components/ui/SearchField';
 import { FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
 import { DataTable, type Column, type SortState } from '@/components/ui/list/DataTable';
 import { AccountingShell, useAccountingView } from '@/components/accounting/AccountingShell';
+import { formatRange } from '@/lib/date-range';
+import type { ReportDoc } from '@/lib/accounting-export';
 import { ExportButtons, MovementList, StatusBanner, accountLabel, useLedgerMoney } from '@/components/accounting/AccountingParts';
 import type { AccountType, AccountingSummary, JournalEntryPage, SummaryCard, TrialBalanceItem, TrialBalanceReport } from '@shared/types';
 
@@ -246,12 +248,24 @@ function TrialBalanceView() {
     { key: 'showZero', kind: 'toggle', label: t('tb.showZero') },
   ];
 
-  const exportRows = () => [
-    [t('tb.title'), `${from} – ${to}`],
-    [t('tb.account'), t('tb.name'), t('tb.type'), t('tb.opening'), t('tb.debit'), t('tb.credit'), t('tb.closing')],
-    ...rows.map((i) => [i.accountCode, i.accountName[locale], t(`types.${i.accountType}_official`), i.openingBalance, i.debitTurnover, i.creditTurnover, i.closingBalance]),
-    [t('tb.total'), '', '', sum((i) => i.openingBalance), tb?.totalDebitTurnover ?? 0, tb?.totalCreditTurnover ?? 0, sum((i) => i.closingBalance)],
-  ];
+  const exportDoc = (): Omit<ReportDoc, 'company' | 'footer'> => ({
+    title: t('tb.title'),
+    meta: [t('export.period', { range: formatRange(from, to) }), t('export.currency')],
+    landscape: true,
+    columns: [
+      { label: t('tb.account'), width: 10 },
+      { label: t('tb.name'), width: 42 },
+      { label: t('tb.type'), width: 14 },
+      { label: t('tb.opening'), numeric: true },
+      { label: t('tb.debit'), numeric: true },
+      { label: t('tb.credit'), numeric: true },
+      { label: t('tb.closing'), numeric: true },
+    ],
+    rows: [
+      ...rows.map((i) => ({ cells: [i.accountCode, i.accountName[locale] || i.accountName.uz, t(`types.${i.accountType}_official`), i.openingBalance, i.debitTurnover, i.creditTurnover, i.closingBalance] })),
+      { kind: 'grand' as const, cells: [t('tb.total'), '', '', sum((i) => i.openingBalance), sum((i) => i.debitTurnover), sum((i) => i.creditTurnover), sum((i) => i.closingBalance)] },
+    ],
+  });
 
   return (
     <Card>
@@ -268,7 +282,7 @@ function TrialBalanceView() {
             </p>
           )}
         </div>
-        {tb && <ExportButtons filename={`aylanma-saldo_${from}_${to}`} rows={exportRows} />}
+        {tb && <ExportButtons filename={`aylanma-saldo_${from}_${to}`} build={exportDoc} />}
       </div>
 
       {tb && (

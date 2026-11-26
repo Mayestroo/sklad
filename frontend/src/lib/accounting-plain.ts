@@ -1,7 +1,7 @@
 /**
  * Buxgalteriya TZ, simple mode: what a journal entry means in plain words
  * (no debit/credit), which balance cards it moved, compact amounts for the
- * cards, the period presets of the section and the spreadsheet export.
+ * cards and the period presets of the section (export: accounting-export.ts).
  * Pure functions: the page translates the keys (messages `acct.*`).
  */
 import { formatNumber } from '../../../shared/format/money.ts';
@@ -175,18 +175,4 @@ export function dayGroup(isoDay: string, now: Date = new Date()): 'today' | 'yes
   const today = quickPeriodRange('today', now).date_from;
   const yesterday = quickPeriodRange('yesterday', now).date_from;
   return isoDay === today ? 'today' : isoDay === yesterday ? 'yesterday' : 'date';
-}
-
-/**
- * A spreadsheet file Excel opens directly: UTF-8 with BOM, ";" between
- * cells (the separator Excel uses with uz/ru regional settings), numbers with
- * a dot and no grouping so they stay numbers.
- */
-export function toCsv(rows: Array<Array<string | number | null | undefined>>): string {
-  const cell = (v: string | number | null | undefined) => {
-    if (v === null || v === undefined) return '';
-    if (typeof v === 'number') return Number.isFinite(v) ? String(v) : '';
-    return /[";\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
-  };
-  return '﻿' + rows.map((r) => r.map(cell).join(';')).join('\r\n');
 }

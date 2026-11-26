@@ -1209,8 +1209,14 @@
     },
     "export": {
       "button": "Скачать отчёт",
-      "excel": "Excel",
-      "pdf": "PDF (печать)"
+      "excel": "Excel (.xlsx)",
+      "pdf": "Печать / PDF",
+      "generated": "Сформировано: {time}",
+      "failed": "Не удалось подготовить файл. Попробуйте ещё раз.",
+      "period": "Период: {range}",
+      "asOf": "на {date}",
+      "currency": "Суммы в UZS",
+      "entries": "Записей: {count}"
     },
     "units": {
       "thousand": "тыс.",
