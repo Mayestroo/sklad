@@ -147,6 +147,30 @@ export function needsUsdRate(
 }
 
 /**
+ * Why the draft cannot be saved yet, or null when it can. The page saves on
+ * its own (autosave); the server refuses a line without a currency and a USD
+ * line without a rate (ADR 0022), so the page waits and says what is missing
+ * instead of sending a request that fails. Categories are the ones of the
+ * lines still missing a currency, in first-seen order.
+ */
+export type OpeningBalanceSaveBlocker =
+  | { kind: 'currency'; categories: string[] }
+  | { kind: 'usdRate' }
+  | null;
+
+export function openingBalanceSaveBlocker(
+  lines: ReadonlyArray<{ category?: string | null; currency?: string | null }>,
+  usdRate: number | string,
+): OpeningBalanceSaveBlocker {
+  const missing = lines.filter((line) => !(line.currency && line.currency.trim()));
+  if (missing.length > 0) {
+    return { kind: 'currency', categories: [...new Set(missing.map((line) => String(line.category ?? '')))] };
+  }
+  if (needsUsdRate(lines, usdRate)) return { kind: 'usdRate' };
+  return null;
+}
+
+/**
  * Debts and advances share one table: the line kind is the category, and it
  * decides which counterparties are offered and the type of a new one.
  */

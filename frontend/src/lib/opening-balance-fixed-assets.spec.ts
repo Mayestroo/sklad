@@ -13,7 +13,7 @@ const page = readFileSync(
   fileURLToPath(new URL('../app/[locale]/(dashboard)/opening-balances/page.tsx', import.meta.url)),
   'utf8',
 );
-const fixedAssetsTab = page.slice(page.indexOf("activeTab === 'fixed-assets'"));
+const fixedAssetsTab = page.slice(page.indexOf('function FixedAssetsTable('));
 const table = page.slice(page.indexOf('function FixedAssetsTable('));
 
 test('the fixed-asset tab states, in both languages, that depreciation is not computed', () => {
