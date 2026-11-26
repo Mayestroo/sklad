@@ -394,8 +394,8 @@ export default function OpeningBalancesPage() {
     const ok = await confirm({
       title: isRu ? 'Провести начальные остатки?' : 'Boshlang‘ich qoldiqlarni tasdiqlaysizmi?',
       description: isRu
-        ? 'Деньги попадут в кассы, товары — на склады (партии FIFO), долги и авансы — в расчёты с контрагентами, основные средства станут активными, будет создана проводка в журнале. Разница между активами, обязательствами и уставным капиталом будет записана как нераспределённая прибыль (8710).'
-        : 'Pul kassalarga, tovarlar omborga (FIFO partiyalari), qarz va avanslar kontragentlar hisob-kitobiga tushadi, asosiy vositalar faollashadi va jurnalda provodka yaratiladi. Aktivlar, majburiyatlar va ustav kapitali orasidagi farq taqsimlanmagan foyda (8710) sifatida yoziladi.',
+        ? 'Деньги появятся в кассах, товары — на складе, долги — у клиентов и поставщиков, бухгалтерия получит проводку. После этого документ станет только для просмотра; ошибку можно исправить кнопкой «Исправить».'
+        : 'Pul kassalarda, tovar omborda, qarzlar mijoz va yetkazib beruvchilarda paydo bo‘ladi, buxgalteriyaga provodka yoziladi. Shundan keyin hujjat faqat ko‘rish uchun bo‘ladi; xatoni «Tuzatish» tugmasi bilan to‘g‘rilash mumkin.',
       variant: 'info',
       confirmText: isRu ? 'Провести' : 'Tasdiqlash',
       cancelText: isRu ? 'Отмена' : 'Bekor qilish',
@@ -679,12 +679,13 @@ export default function OpeningBalancesPage() {
     return counts;
   }, [lines]);
 
+  // Each section asks one plain question; the list shows it until lines exist.
   const navTabs = [
-    { key: 'cash' as TabKey, label: isRu ? 'Деньги' : 'Pul mablag‘lari', icon: Wallet, count: tabCounts.cash },
-    { key: 'inventory' as TabKey, label: isRu ? 'Товары' : 'Tovarlar', icon: Package, count: tabCounts.inventory },
-    { key: 'debts' as TabKey, label: isRu ? 'Долги и авансы' : 'Qarzlar va avanslar', icon: Users, count: tabCounts.debts },
-    { key: 'fixed-assets' as TabKey, label: isRu ? 'Основные средства' : 'Asosiy vositalar', icon: Building, count: tabCounts.fixedAssets },
-    { key: 'other' as TabKey, label: isRu ? 'Капитал и прочее' : 'Kapital va boshqalar', icon: Layers, count: tabCounts.other },
+    { key: 'cash' as TabKey, label: isRu ? 'Деньги' : 'Pul', question: isRu ? 'Сколько денег в кассах и на счетах?' : 'Kassa va bankda qancha pul bor?', icon: Wallet, count: tabCounts.cash },
+    { key: 'inventory' as TabKey, label: isRu ? 'Товары' : 'Tovarlar', question: isRu ? 'Что и сколько лежит на складе?' : 'Omborda nima va qancha bor?', icon: Package, count: tabCounts.inventory },
+    { key: 'debts' as TabKey, label: isRu ? 'Долги' : 'Qarzlar', question: isRu ? 'Кто кому должен?' : 'Kim kimga qarz?', icon: Users, count: tabCounts.debts },
+    { key: 'fixed-assets' as TabKey, label: isRu ? 'Оборудование и здания' : 'Uskuna va binolar', question: isRu ? 'Станки, машины, здания (если есть)' : 'Stanok, mashina, bino (bo‘lsa)', icon: Building, count: tabCounts.fixedAssets },
+    { key: 'other' as TabKey, label: isRu ? 'Уставный капитал' : 'Ustav kapitali', question: isRu ? 'Обычно можно пропустить' : 'Odatda o‘tkazib yuborsa bo‘ladi', icon: Layers, count: tabCounts.other },
   ];
 
   const tableProps = { lines, isReadOnly, locale, isRu, onUpdate: updateLineField, onRemove: removeLine };
@@ -701,20 +702,16 @@ export default function OpeningBalancesPage() {
           </h1>
           <p style={{ margin: '6px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             {isRu
-              ? 'Укажите, что есть у компании на дату начала учёта: деньги, товары, долги, основные средства. Капитал рассчитывается автоматически.'
-              : 'Hisob boshlanadigan sanadagi bor narsani kiriting: pul, tovar, qarzlar, asosiy vositalar. Kapital avtomatik hisoblanadi.'}
+              ? 'Что было у компании в день, когда вы начинаете работать в программе: деньги в кассах, товар на складе, кто кому должен. Вводится один раз.'
+              : 'Dasturda ishlashni boshlagan kuningizda kompaniyada nima bor edi: kassadagi pul, ombordagi tovar, kim kimga qarz. Bir marta kiritiladi.'}
           </p>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
-          <Button variant="secondary" onClick={() => setShowImportModal(true)} disabled={!currentDoc || isReadOnly} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <FileSpreadsheet size={16} />
-            <span>Excel</span>
+        {currentDoc && !isReadOnly && (
+          <Button variant="secondary" onClick={() => setShowImportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <FileSpreadsheet size={16} aria-hidden />
+            <span>{isRu ? 'Загрузить из Excel' : 'Exceldan yuklash'}</span>
           </Button>
-          <Button variant="primary" onClick={() => setShowNewDocModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            <span>{isRu ? 'Новый документ' : 'Yangi hujjat'}</span>
-          </Button>
-        </div>
+        )}
       </div>
 
       {documentsLoaded && documents.length === 0 ? (
@@ -723,11 +720,11 @@ export default function OpeningBalancesPage() {
           <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', color: 'var(--color-text-primary)' }}>
             {isRu ? 'Остатки ещё не вводились' : 'Boshlang‘ich qoldiqlar hali kiritilmagan'}
           </h3>
-          <p style={{ margin: 0, maxWidth: 520, fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-            {isRu
-              ? 'Выберите дату начала учёта и внесите остатки по вкладкам или загрузите их из Excel.'
-              : 'Hisob boshlanish sanasini tanlang va qoldiqlarni bo‘limlar bo‘yicha kiriting yoki Exceldan yuklang.'}
-          </p>
+          <ol style={{ margin: 0, paddingLeft: 20, maxWidth: 520, textAlign: 'left', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
+            <li>{isRu ? 'Выберите дату — с какого дня вы ведёте учёт в программе.' : 'Sanani tanlang — dasturda qaysi kundan hisob yuritasiz.'}</li>
+            <li>{isRu ? 'Заполните то, что у вас есть: деньги, товары, долги. Ненужное пропустите.' : 'Bor narsani kiriting: pul, tovar, qarzlar. Keraksizini o‘tkazib yuboring.'}</li>
+            <li>{isRu ? 'Нажмите «Провести» — остатки появятся в кассах, на складе и в расчётах.' : '«Tasdiqlash»ni bosing — qoldiqlar kassa, ombor va hisob-kitoblarda paydo bo‘ladi.'}</li>
+          </ol>
           <Button variant="primary" onClick={() => setShowNewDocModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
             <Plus size={16} />
             <span>{isRu ? 'Начать ввод остатков' : 'Qoldiqlarni kiritishni boshlash'}</span>
@@ -735,42 +732,52 @@ export default function OpeningBalancesPage() {
         </Card>
       ) : (
         <>
-          {/* Document bar */}
+          {/* Document bar: which date, which state, what to do */}
           <Card style={{ padding: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-                {documents.length > 1 ? (
-                  <div style={{ width: '280px' }}>
-                    <Select options={documentOptions} value={selectedDocId} onChange={setSelectedDocId} placeholder={isRu ? 'Выберите документ' : 'Hujjatni tanlang'} size="sm" />
-                  </div>
-                ) : (
-                  <strong style={{ color: 'var(--color-text-primary)' }}>{currentDoc?.docNumber}</strong>
-                )}
-                {currentDoc && getDocStatusBadge(currentDoc.status)}
-
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
+              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Дата остатков:' : 'Qoldiq sanasi:'}
+                    {isRu ? 'Документ' : 'Hujjat'}
                   </span>
-                  <div style={{ width: '150px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minHeight: 32 }}>
+                    {documents.length > 1 ? (
+                      <div style={{ width: '260px' }}>
+                        <Select options={documentOptions} value={selectedDocId} onChange={setSelectedDocId} placeholder={isRu ? 'Выберите документ' : 'Hujjatni tanlang'} size="sm" />
+                      </div>
+                    ) : (
+                      <strong style={{ color: 'var(--color-text-primary)' }}>{currentDoc?.docNumber}</strong>
+                    )}
+                    {currentDoc && getDocStatusBadge(currentDoc.status)}
+                  </div>
+                </div>
+
+                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                    {isRu ? 'Остатки на дату' : 'Qaysi kundagi holat'}
+                  </span>
+                  <div style={{ width: '160px' }}>
                     <DatePicker value={openingDate} onChange={setOpeningDate} disabled={isReadOnly} size="sm" />
                   </div>
                 </label>
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px' }} data-testid="document-usd-rate">
-                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Курс USD (UZS):' : 'USD kursi (UZS):'}
-                  </span>
-                  <MoneyInput
-                    value={usdRate}
-                    disabled={isReadOnly}
-                    onValueChange={setUsdRate}
-                    decimals={4}
-                    placeholder={hasUsdLines ? (isRu ? 'обязательно' : 'majburiy') : '—'}
-                    aria-label={isRu ? 'Курс USD к UZS на дату остатков' : 'Qoldiq sanasidagi USD ning UZS kursi'}
-                    style={{ width: 130, borderColor: needsUsdRate(lines, usdRate) && !isReadOnly ? 'var(--color-warning-500)' : undefined }}
-                  />
-                </label>
+                {/* The rate matters only once a line is in dollars. */}
+                {(hasUsdLines || Number(usdRate) > 0) && (
+                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }} data-testid="document-usd-rate">
+                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
+                      {isRu ? '1 USD = ? UZS на эту дату' : 'Shu kuni 1 USD = ? UZS'}
+                    </span>
+                    <MoneyInput
+                      value={usdRate}
+                      disabled={isReadOnly}
+                      onValueChange={setUsdRate}
+                      decimals={4}
+                      placeholder={isRu ? 'обязательно' : 'majburiy'}
+                      aria-label={isRu ? 'Курс USD к UZS на дату остатков' : 'Qoldiq sanasidagi USD ning UZS kursi'}
+                      style={{ width: 150, borderColor: needsUsdRate(lines, usdRate) && !isReadOnly ? 'var(--color-warning-500)' : undefined }}
+                    />
+                  </label>
+                )}
               </div>
 
               <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
@@ -779,9 +786,9 @@ export default function OpeningBalancesPage() {
                     <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="danger-ghost" size="sm" onClick={handleDeleteDocument} disabled={actionLoading}>
                       <Trash2 size={14} aria-hidden />
                     </Button>
-                    <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading}>
+                    <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading} title={isRu ? 'Сохранить черновик и продолжить позже' : 'Qoralamani saqlab, keyin davom ettirish'}>
                       <Save size={14} aria-hidden />
-                      <span>{isRu ? 'Сохранить' : 'Saqlash'}</span>
+                      <span>{isRu ? 'Сохранить черновик' : 'Qoralamani saqlash'}</span>
                     </Button>
                     <Button variant="primary" size="sm" onClick={handlePost} loading={actionLoading} loadingText={isRu ? 'Подождите…' : 'Kuting…'}>
                       <CheckCircle2 size={14} aria-hidden />
@@ -791,17 +798,17 @@ export default function OpeningBalancesPage() {
                 )}
                 {currentDoc && isPosted && (
                   <Button variant="danger-outline" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <RotateCcw size={14} />
-                    <span>{isRu ? 'Переоткрыть' : 'Qayta ochish'}</span>
+                    <RotateCcw size={14} aria-hidden />
+                    <span>{isRu ? 'Исправить (переоткрыть)' : 'Tuzatish (qayta ochish)'}</span>
                   </Button>
                 )}
               </div>
             </div>
-            {isPosted && (
-              <p role="note" style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+            {hasUsdLines && !isReadOnly && (
+              <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
                 {isRu
-                  ? 'Документ проведён, поля только для просмотра. Чтобы исправить остатки, нажмите «Переоткрыть» — проводки будут отменены, затем проведите снова.'
-                  : 'Hujjat tasdiqlangan, maydonlar faqat ko‘rish uchun. Qoldiqlarni tuzatish uchun «Qayta ochish»ni bosing — provodkalar bekor qilinadi, keyin qayta tasdiqlang.'}
+                  ? 'Есть строки в долларах: по этому курсу они пересчитаются в сумы для итогов и бухгалтерии.'
+                  : 'Dollardagi qatorlar bor: jami va buxgalteriya uchun ular shu kurs bo‘yicha so‘mga o‘tkaziladi.'}
               </p>
             )}
             {ratesWereMixed && !isReadOnly && (
@@ -811,34 +818,47 @@ export default function OpeningBalancesPage() {
                   : 'Qatorlarda turli USD kurslari bor edi. Saqlaganda barcha USD qatorlariga hujjatning bitta kursi qo‘llanadi.'}
               </p>
             )}
+            {isPosted && <PostedLinks isRu={isRu} />}
+            {documents.length > 0 && (
+              <div style={{ marginTop: 'var(--space-3)' }}>
+                <button type="button" onClick={() => setShowNewDocModal(true)} style={{ background: 'none', border: 'none', padding: 0, minHeight: 32, cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                  <Plus size={12} aria-hidden />
+                  {isRu ? 'Нужна ещё одна дата? Создать новый документ' : 'Boshqa sana kerakmi? Yangi hujjat yaratish'}
+                </button>
+              </div>
+            )}
           </Card>
 
-          {/* Summary: assets, liabilities, capital (balances itself) */}
-          <StatCardGrid label={isRu ? 'Итоги баланса' : 'Balans yakunlari'} count={3}>
+          {/* Summary in plain words: what the company has, what it owes, and the difference */}
+          <StatCardGrid label={isRu ? 'Итоги' : 'Yakunlar'} count={3}>
             <StatCard
-              label={isRu ? 'Активы' : 'Aktivlar'}
+              label={isRu ? 'Что есть у компании' : 'Kompaniyada bor'}
               value={formatCurrency(totals.totalAssets, locale, docCurrency)}
-              secondary={isRu ? 'Деньги, товары, долги клиентов, ОС' : 'Pul, tovar, mijozlar qarzi, asosiy vositalar'}
+              secondary={isRu ? 'Деньги + товары + долги вам + основные средства' : 'Pul + tovar + sizga qarzlar + asosiy vositalar'}
             />
             <StatCard
-              label={isRu ? 'Обязательства' : 'Majburiyatlar'}
+              label={isRu ? 'Что компания должна' : 'Kompaniya qarzi'}
               value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
-              secondary={isRu ? 'Долги поставщикам, полученные авансы' : 'Yetkazib beruvchilarga qarz, olingan avanslar'}
+              secondary={isRu ? 'Долги поставщикам и полученные авансы' : 'Yetkazib beruvchilarga qarz va olingan avanslar'}
             />
             <StatCard
-              label={isRu ? 'Капитал (рассчитан)' : 'Kapital (hisoblangan)'}
+              label={isRu ? 'Собственный капитал' : 'O‘z kapitali'}
               value={formatCurrency(totals.totalEquity, locale, docCurrency)}
               negative={totals.totalEquity < 0}
               secondary={
-                isRu
-                  ? `Уставный: ${formatCurrency(totals.enteredEquity, locale, docCurrency)} · Нераспр. прибыль: ${formatCurrency(totals.retainedEarnings, locale, docCurrency)}`
-                  : `Ustav: ${formatCurrency(totals.enteredEquity, locale, docCurrency)} · Taqsimlanmagan foyda: ${formatCurrency(totals.retainedEarnings, locale, docCurrency)}`
+                totals.enteredEquity !== 0
+                  ? isRu
+                    ? `Есть − должна. Из них уставный: ${formatCurrency(totals.enteredEquity, locale, docCurrency)}`
+                    : `Bor − qarz. Shundan ustav kapitali: ${formatCurrency(totals.enteredEquity, locale, docCurrency)}`
+                  : isRu
+                    ? 'Есть − должна. Считается сам, вводить не нужно'
+                    : 'Bor − qarz. O‘zi hisoblanadi, kiritish shart emas'
               }
             />
           </StatCardGrid>
           {!totals.hasValidCurrencyRates && !isReadOnly && (
             <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
-              <AlertTriangle size={16} />
+              <AlertTriangle size={16} aria-hidden />
               <span>
                 {isRu
                   ? 'Строки без валюты или USD-строки без курса не входят в итоги.'
@@ -846,8 +866,6 @@ export default function OpeningBalancesPage() {
               </span>
             </div>
           )}
-
-          {isPosted && <PostedLinks isRu={isRu} />}
 
           {/* Sections as a numbered checklist on the left; the chosen section on the right, with "next section" at its end */}
           <div className="ob-layout">
@@ -867,7 +885,7 @@ export default function OpeningBalancesPage() {
                           <Icon size={14} aria-hidden /> {tab.label}
                         </span>
                         <span className="rd-sub" style={{ display: 'block' }}>
-                          {tab.count > 0 ? tob('linesCount', { count: tab.count }) : tob('empty')}
+                          {tab.count > 0 ? tob('linesCount', { count: tab.count }) : tab.question}
                         </span>
                       </span>
                     </button>
@@ -880,8 +898,12 @@ export default function OpeningBalancesPage() {
           <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
           {activeTab === 'cash' && (
             <SubledgerCard
-              title={isRu ? 'Деньги в кассах и на счетах' : 'Kassa va bankdagi pul'}
-              hint={isRu ? 'Попадут на баланс выбранной кассы.' : 'Tanlangan kassa qoldig‘iga qo‘shiladi.'}
+              title={isRu ? 'Сколько денег в кассах и на счетах?' : 'Kassa va bankda qancha pul bor?'}
+              hint={
+                isRu
+                  ? 'По строке на каждую кассу или банковский счёт: выберите её и впишите сумму на эту дату.'
+                  : 'Har bir kassa yoki bank hisobi uchun bitta qator: uni tanlang va shu kundagi summani yozing.'
+              }
               isReadOnly={isReadOnly}
               onAdd={() => addLine('CASH')}
               addText={isRu ? 'Добавить кассу' : 'Kassa qo‘shish'}
@@ -892,11 +914,11 @@ export default function OpeningBalancesPage() {
 
           {activeTab === 'inventory' && (
             <SubledgerCard
-              title={isRu ? 'Товары и материалы на складах' : 'Ombordagi tovar va materiallar'}
+              title={isRu ? 'Что и сколько лежит на складе?' : 'Omborda nima va qancha bor?'}
               hint={
                 isRu
-                  ? 'Каждая строка станет первой партией FIFO на складе; себестоимость берётся из карточки товара.'
-                  : 'Har bir qator omborda birinchi FIFO partiyasi bo‘ladi; tannarx tovar kartochkasidan olinadi.'
+                  ? 'Товар, количество и за сколько вы купили одну штуку (цена подставится из карточки товара). По этой цене потом посчитается прибыль от продаж.'
+                  : 'Tovar, miqdori va bittasini qanchaga olgansiz (narx tovar kartochkasidan o‘zi qo‘yiladi). Sotuvdagi foyda keyin shu narxdan hisoblanadi.'
               }
               isReadOnly={isReadOnly}
               onAdd={() => addLine('INVENTORY')}
@@ -913,11 +935,11 @@ export default function OpeningBalancesPage() {
 
           {activeTab === 'debts' && (
             <SubledgerCard
-              title={isRu ? 'Долги и авансы контрагентов' : 'Kontragentlar bilan qarz va avanslar'}
+              title={isRu ? 'Кто кому должен?' : 'Kim kimga qarz?'}
               hint={
                 isRu
-                  ? 'Попадут в расчёты с контрагентом в своей валюте; последующие оплаты закроют их.'
-                  : 'Kontragent hisob-kitobiga o‘z valyutasida tushadi; keyingi to‘lovlar ularni yopadi.'
+                  ? 'Клиенты, которые должны вам, поставщики, которым должны вы, и предоплаты. Когда долг оплатят, он закроется сам.'
+                  : 'Sizga qarz mijozlar, siz qarz yetkazib beruvchilar va oldindan to‘lovlar. Qarz to‘langanda o‘zi yopiladi.'
               }
               isReadOnly={isReadOnly}
               onAdd={() => addLine('CUSTOMER_DEBT')}
@@ -933,11 +955,15 @@ export default function OpeningBalancesPage() {
 
           {activeTab === 'fixed-assets' && (
             <SubledgerCard
-              title={isRu ? 'Основные средства' : 'Asosiy vositalar'}
-              hint={null}
+              title={isRu ? 'Оборудование, машины, здания' : 'Uskuna, mashina, binolar'}
+              hint={
+                isRu
+                  ? 'Вещи, которыми компания пользуется долго (основные средства). Если их нет — пропустите этот раздел.'
+                  : 'Kompaniya uzoq foydalanadigan narsalar (asosiy vositalar). Bo‘lmasa, bu bo‘limni o‘tkazib yuboring.'
+              }
               isReadOnly={isReadOnly}
               onAdd={() => addLine('FIXED_ASSET')}
-              addText={isRu ? 'Добавить средство' : 'Asosiy vosita qo‘shish'}
+              addText={isRu ? 'Добавить' : 'Qo‘shish'}
             >
               {/* B6 / D6: depreciation is not computed by the system after posting. */}
               <p
@@ -945,8 +971,8 @@ export default function OpeningBalancesPage() {
                 style={{ margin: 'var(--space-3) var(--space-5)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', color: 'var(--color-warning-700)', fontSize: 'var(--text-sm)' }}
               >
                 {isRu
-                  ? 'Амортизация не рассчитывается автоматически. Выберите средство из реестра или создайте новое: стоимость и накопленная амортизация (UZS) берутся из реестра; при создании можно рассчитать амортизацию линейным методом на дату остатков.'
-                  : 'Eskirish tizimda avtomatik hisoblanmaydi. Vositani reyestrdan tanlang yoki yangisini yarating: qiymat va jamg‘arilgan eskirish (UZS) reyestrdan olinadi; yaratishda eskirishni qoldiq sanasiga chiziqli usulda hisoblab olish mumkin.'}
+                  ? 'Выберите вещь из списка или нажмите «Новое средство»: там же вписываются цена покупки и сколько она уже износилась (кнопка «Рассчитать» посчитает). Амортизация не рассчитывается автоматически и после проведения.'
+                  : 'Ro‘yxatdan tanlang yoki «Yangi asosiy vosita»ni bosing: u yerda sotib olingan narxi va qancha eskirgani yoziladi («Hisoblash» tugmasi hisoblab beradi). Eskirish tizimda avtomatik hisoblanmaydi, tasdiqlangandan keyin ham.'}
               </p>
               <FixedAssetsTable
                 {...tableProps}
@@ -959,15 +985,15 @@ export default function OpeningBalancesPage() {
 
           {activeTab === 'other' && (
             <SubledgerCard
-              title={isRu ? 'Уставный капитал и прочие статьи' : 'Ustav kapitali va boshqa moddalar'}
+              title={isRu ? 'Уставный капитал и прочее' : 'Ustav kapitali va boshqalar'}
               hint={
                 isRu
-                  ? 'Нераспределённую прибыль вводить не нужно — она рассчитывается автоматически.'
-                  : 'Taqsimlanmagan foydani kiritish shart emas — u avtomatik hisoblanadi.'
+                  ? 'Необязательно. Впишите уставный капитал из устава, если бухгалтер просит. Остальной капитал программа посчитает сама.'
+                  : 'Ixtiyoriy. Buxgalter so‘rasa, nizomdagi ustav kapitalini yozing. Qolgan kapitalni dastur o‘zi hisoblaydi.'
               }
               isReadOnly={isReadOnly}
               onAdd={() => addLine('EQUITY')}
-              addText={isRu ? 'Добавить статью' : 'Modda qo‘shish'}
+              addText={isRu ? 'Добавить' : 'Qo‘shish'}
             >
               <OtherTable {...tableProps} />
             </SubledgerCard>
@@ -1143,7 +1169,7 @@ export default function OpeningBalancesPage() {
       </Modal>
 
       {/* Unpost (rollback invariant) */}
-      <Modal icon={<LockOpen size={20} />} tone="warning" isOpen={showUnpostModal} title={isRu ? 'Переоткрыть документ остатков' : 'Boshlang‘ich qoldiqni qayta ochish'} onClose={() => setShowUnpostModal(false)}
+      <Modal icon={<LockOpen size={20} />} tone="warning" isOpen={showUnpostModal} title={isRu ? 'Исправить остатки' : 'Qoldiqlarni tuzatish'} onClose={() => setShowUnpostModal(false)}
         footer={
           <>
             <Button data-dialog-cancel variant="secondary" onClick={() => setShowUnpostModal(false)}>
@@ -1195,17 +1221,22 @@ function PostedLinks({ isRu }: { isRu: boolean }) {
     { href: '/accounting/journal', label: isRu ? 'Журнал проводок' : 'Buxgalteriya jurnali' },
   ];
   return (
-    <Card style={{ padding: 'var(--space-4)', display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }} data-testid="opening-balance-posted-links">
-      <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-        {isRu ? 'Остатки проведены и видны в разделах:' : 'Qoldiqlar tasdiqlangan va quyidagi bo‘limlarda ko‘rinadi:'}
+    <div role="note" data-testid="opening-balance-posted-links" style={{ marginTop: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
+      <span>
+        {isRu
+          ? 'Остатки проведены, здесь их можно только посмотреть. Нашли ошибку — нажмите «Исправить», поправьте и проведите снова.'
+          : 'Qoldiqlar tasdiqlangan, bu yerda faqat ko‘rish mumkin. Xato topsangiz — «Tuzatish»ni bosing, to‘g‘rilang va qayta tasdiqlang.'}
       </span>
-      {links.map((link) => (
-        <Link key={link.href} href={link.href} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontSize: 'var(--text-sm)', fontWeight: 600, color: 'var(--color-primary-600)' }}>
-          {link.label}
-          <ArrowRight size={14} />
-        </Link>
-      ))}
-    </Card>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
+        <span>{isRu ? 'Где их видно:' : 'Qayerda ko‘rinadi:'}</span>
+        {links.map((link) => (
+          <Link key={link.href} href={link.href} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, fontWeight: 600, color: 'var(--color-primary-600)' }}>
+            {link.label}
+            <ArrowRight size={14} aria-hidden />
+          </Link>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -1256,7 +1287,7 @@ function CashTable({ lines, isReadOnly, accounts, locale, isRu, onUpdate, onRemo
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <EmptyRow colSpan={6} text={isRu ? 'Кассы не добавлены' : 'Kassalar qo‘shilmagan'} />
+          <EmptyRow colSpan={6} text={isRu ? 'Пока пусто. Нажмите «Добавить кассу». Денег нет — пропустите раздел.' : 'Hozircha bo‘sh. «Kassa qo‘shish»ni bosing. Pul bo‘lmasa, bo‘limni o‘tkazib yuboring.'} />
         ) : (
           filtered.map(({ line, index }, pos) => (
             <tr key={index} style={rowStyle}>
@@ -1337,7 +1368,7 @@ function InventoryTable({
           <th style={th({ minWidth: '240px' })}>{isRu ? 'Товар' : 'Tovar'}</th>
           {warehouses.length > 1 && <th style={th({ minWidth: '180px' })}>{isRu ? 'Склад' : 'Ombor'}</th>}
           <th style={th({ width: '120px', textAlign: 'right' })}>{isRu ? 'Количество' : 'Miqdor'}</th>
-          <th style={th({ width: '140px', textAlign: 'right' })}>{isRu ? 'Себестоимость' : 'Tannarx'}</th>
+          <th style={th({ width: '140px', textAlign: 'right' })}>{isRu ? 'Цена за 1 шт. (закуп)' : '1 donasi (tannarx)'}</th>
           <th style={th({ width: '110px' })}>{isRu ? 'Валюта' : 'Valyuta'}</th>
           <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Сумма' : 'Summa'}</th>
           {!isReadOnly && <th style={th({ width: '50px' })}></th>}
@@ -1345,7 +1376,7 @@ function InventoryTable({
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <EmptyRow colSpan={8} text={isRu ? 'Товары не добавлены' : 'Tovarlar qo‘shilmagan'} />
+          <EmptyRow colSpan={8} text={isRu ? 'Пока пусто. Нажмите «Добавить товар» или загрузите список из Excel.' : 'Hozircha bo‘sh. «Tovar qo‘shish»ni bosing yoki ro‘yxatni Exceldan yuklang.'} />
         ) : (
           filtered.map(({ line, index }, pos) => (
             <tr key={index} style={rowStyle}>
@@ -1452,7 +1483,7 @@ function DebtsTable({
       <thead style={theadStyle}>
         <tr>
           <th style={th({ width: '40px' })}>#</th>
-          <th style={th({ width: '240px' })}>{isRu ? 'Что это' : 'Turi'}</th>
+          <th style={th({ width: '240px' })}>{isRu ? 'Кто кому должен' : 'Kim kimga qarz'}</th>
           <th style={th({ minWidth: '240px' })}>{isRu ? 'Контрагент' : 'Kontragent'}</th>
           <th style={th({ width: '100px' })}>{isRu ? 'Валюта' : 'Valyuta'}</th>
           <th style={th({ minWidth: '180px', textAlign: 'right' })}>{isRu ? 'Сумма' : 'Summa'}</th>
@@ -1462,7 +1493,7 @@ function DebtsTable({
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <EmptyRow colSpan={7} text={isRu ? 'Долги и авансы не добавлены' : 'Qarz va avanslar qo‘shilmagan'} />
+          <EmptyRow colSpan={7} text={isRu ? 'Пока пусто. Нажмите «Добавить строку»: одна строка — один клиент или поставщик.' : 'Hozircha bo‘sh. «Qator qo‘shish»ni bosing: bitta qator — bitta mijoz yoki yetkazib beruvchi.'} />
         ) : (
           filtered.map(({ line, index }, pos) => {
             const kind = line.category as CounterpartyLineKind;
@@ -1554,17 +1585,17 @@ function FixedAssetsTable({
       <thead style={theadStyle}>
         <tr>
           <th style={th({ width: '40px' })}>#</th>
-          <th style={th({ minWidth: '260px' })}>{isRu ? 'Средство из реестра' : 'Reyestrdagi vosita'}</th>
+          <th style={th({ minWidth: '260px' })}>{isRu ? 'Что это' : 'Nima'}</th>
           <th style={th({ width: '140px' })}>{isRu ? 'Инв. номер' : 'Inv. raqam'}</th>
-          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Стоимость' : 'Boshlang‘ich qiymat'}</th>
-          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Амортизация' : 'Eskirish'}</th>
-          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Остаточная' : 'Qoldiq qiymat'}</th>
+          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Купили за' : 'Olingan narxi'}</th>
+          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Износ' : 'Eskirgan qismi'}</th>
+          <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Стоит сейчас' : 'Hozirgi qiymati'}</th>
           {!isReadOnly && <th style={th({ width: '50px' })}></th>}
         </tr>
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <EmptyRow colSpan={7} text={isRu ? 'Основные средства не добавлены' : 'Asosiy vositalar qo‘shilmagan'} />
+          <EmptyRow colSpan={7} text={isRu ? 'Пока пусто. Если оборудования и зданий нет — пропустите раздел.' : 'Hozircha bo‘sh. Uskuna va bino bo‘lmasa, bo‘limni o‘tkazib yuboring.'} />
         ) : (
           filtered.map(({ line, index }, pos) => {
             const initCost = Number(line.amount || 0);
@@ -1770,7 +1801,7 @@ function OtherTable({ lines, isReadOnly, isRu, onUpdate, onRemove }: SubledgerTa
       <thead style={theadStyle}>
         <tr>
           <th style={th({ width: '40px' })}>#</th>
-          <th style={th({ width: '240px' })}>{isRu ? 'Статья' : 'Modda'}</th>
+          <th style={th({ width: '240px' })}>{isRu ? 'Что это' : 'Nima'}</th>
           <th style={th({ minWidth: '220px' })}>{isRu ? 'Описание' : 'Tavsif'}</th>
           <th style={th({ minWidth: '180px', textAlign: 'right' })}>{isRu ? 'Сумма (UZS)' : 'Summa (UZS)'}</th>
           {!isReadOnly && <th style={th({ width: '50px' })}></th>}
@@ -1778,7 +1809,7 @@ function OtherTable({ lines, isReadOnly, isRu, onUpdate, onRemove }: SubledgerTa
       </thead>
       <tbody>
         {filtered.length === 0 ? (
-          <EmptyRow colSpan={5} text={isRu ? 'Статьи не добавлены' : 'Moddalar qo‘shilmagan'} />
+          <EmptyRow colSpan={5} text={isRu ? 'Пусто — это нормально. Капитал посчитается сам.' : 'Bo‘sh — bu normal. Kapital o‘zi hisoblanadi.'} />
         ) : (
           filtered.map(({ line, index }, pos) => (
             <tr key={index} style={rowStyle}>
@@ -1791,8 +1822,8 @@ function OtherTable({ lines, isReadOnly, isRu, onUpdate, onRemove }: SubledgerTa
                   style={{ width: '100%' }}
                   options={[
                     { value: 'EQUITY', label: isRu ? 'Уставный капитал' : 'Ustav kapitali' },
-                    { value: 'OTHER_ASSET', label: isRu ? 'Прочий актив' : 'Boshqa aktiv' },
-                    { value: 'OTHER_LIABILITY', label: isRu ? 'Прочее обязательство' : 'Boshqa majburiyat' },
+                    { value: 'OTHER_ASSET', label: isRu ? 'Прочее, что есть у компании' : 'Kompaniyada bor boshqa narsa', description: isRu ? 'Например: переплата налога' : 'Masalan: soliq ortiqcha to‘lovi' },
+                    { value: 'OTHER_LIABILITY', label: isRu ? 'Прочий долг компании' : 'Kompaniyaning boshqa qarzi', description: isRu ? 'Например: зарплата или налог к уплате' : 'Masalan: to‘lanmagan ish haqi yoki soliq' },
                   ]}
                 />
               </td>

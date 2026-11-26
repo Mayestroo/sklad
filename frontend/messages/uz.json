@@ -922,7 +922,6 @@
     "ob": {
       "sections": "Bo‘limlar",
       "linesCount": "{count, plural, other {# ta qator}}",
-      "empty": "hali kiritilmagan",
       "stepsHint": "Kerakli bo‘limlarni to‘ldiring — bo‘sh qolgan bo‘lim nolga teng deb olinadi. Kapital o‘zi hisoblanadi.",
       "nextSection": "Keyingi: {name}"
     },
