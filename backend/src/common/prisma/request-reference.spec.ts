@@ -20,6 +20,8 @@ const ALLOWLIST: Record<string, string> = {
   'JournalService.createJournalEntry':
     'Internal writer for automatic postings (accounts resolved by code within the tenant); the user route goes through createManualEntry, which checks',
   'AuditService.logAction': INTERNAL,
+  'JournalService.writeStorno':
+    'Copies an entry already read with { tenantId, sourceDocType, sourceDocId } or { id, tenantId }; no request ids',
   'OpeningBalancesService.lineData':
     'Maps a line to its row; create and updateLines call assertLineReferences on the same lines first',
   'FinanceService.listTransactions': READ_FILTER,

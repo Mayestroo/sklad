@@ -141,7 +141,7 @@ describe('closed-period guard coverage (source scan)', () => {
   /**
    * Lifecycle methods that change the books for a dated document without
    * (only) going through createJournalEntry with that document's date.
-   * Each must call assertPeriodOpen or JournalService.deleteEntriesForSource.
+   * Each must call assertPeriodOpen or JournalService.reverseEntriesForSource.
    * Posting paths whose journal entry carries the document date are covered
    * by createJournalEntry itself; payments and inventory documents have no
    * document date (always "now", and an unfinished month cannot be closed).
@@ -194,6 +194,6 @@ describe('closed-period guard coverage (source scan)', () => {
 
   it.each(GUARDED)('%s %s checks the accounting period', (file, signature) => {
     const body = methodBody(readFileSync(join(SRC, file), 'utf8'), signature);
-    expect(body).toMatch(/assertPeriodOpen\(|deleteEntriesForSource\(/);
+    expect(body).toMatch(/assertPeriodOpen\(|reverseEntriesForSource\(/);
   });
 });

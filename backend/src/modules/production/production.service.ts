@@ -1989,7 +1989,7 @@ export class ProductionService {
 
       // The completion's journal entry goes with it (ADR 0020 / 0026).
       if (previousStatus === ManufacturingStatus.COMPLETED) {
-        await this.journalService.deleteEntriesForSource(
+        await this.journalService.reverseEntriesForSource(
           tx,
           tenantId,
           'ProductionDocument',

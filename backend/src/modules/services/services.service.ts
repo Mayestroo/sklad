@@ -568,7 +568,7 @@ export class ServicesService {
           idempotencyKey: `ServiceAct:${act.id}:CANCELLED`,
         });
 
-        await this.journalService.deleteEntriesForSource(
+        await this.journalService.reverseEntriesForSource(
           tx,
           tenantId,
           'ServiceAct',
@@ -651,7 +651,7 @@ export class ServicesService {
       }
 
       // Delete linked BHMS journal entry
-      await this.journalService.deleteEntriesForSource(
+      await this.journalService.reverseEntriesForSource(
         tx,
         tenantId,
         'ServiceAct',

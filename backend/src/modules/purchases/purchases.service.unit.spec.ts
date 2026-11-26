@@ -942,13 +942,18 @@ describe('PurchasesService Full Unit & Invariant Test Suite', () => {
       );
 
       // Journal entries removed
-      expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
-        where: {
-          tenantId: 'tenant-123',
-          sourceDocType: 'PurchaseReceipt',
-          sourceDocId: 'rec-unpost-mixed',
-        },
-      });
+      // Storno (TZ 10.2): the active entries of the document are looked up and
+      // reversed, never deleted.
+      expect(prisma.journalEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: 'tenant-123',
+            sourceDocType: 'PurchaseReceipt',
+            sourceDocId: 'rec-unpost-mixed',
+          }),
+        }),
+      );
+      expect(prisma.journalEntry.deleteMany).not.toHaveBeenCalled();
     });
   });
 

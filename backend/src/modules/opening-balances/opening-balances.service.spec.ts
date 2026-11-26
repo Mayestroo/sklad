@@ -955,11 +955,16 @@ describe('OpeningBalancesService Unit & Invariant Test Suite', () => {
       expect(prisma.productBatch.deleteMany).toHaveBeenCalledWith({
         where: { tenantId: 'tenant-1', id: { in: ['batch-intact'] } },
       });
-      expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
-        where: expect.objectContaining({
-          sourceDocType: 'OpeningBalanceDocument',
+      // Storno (TZ 10.2): looked up and reversed, never deleted.
+      expect(prisma.journalEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            sourceDocType: 'OpeningBalanceDocument',
+            status: 'POSTED',
+          }),
         }),
-      });
+      );
+      expect(prisma.journalEntry.deleteMany).not.toHaveBeenCalled();
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({

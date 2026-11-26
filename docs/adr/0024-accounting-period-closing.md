@@ -62,3 +62,7 @@ a closed period.
   date. The explicit document-date checks above keep the closing rule
   intact; correcting the entry dates is a separate change.
 - No UI yet: periods are closed through the API.
+
+
+## Update (2026-11-26)
+Journal entries are no longer deleted when a document is unposted, cancelled or deleted: they are reversed with storno entries dated like the originals (ADR 0027). Balances per period are unchanged, and the closed-period check still applies to the originals' dates.

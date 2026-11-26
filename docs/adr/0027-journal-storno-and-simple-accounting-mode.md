@@ -1,0 +1,16 @@
+# 27. Journal Storno and the Simple Accounting Mode
+
+## Context
+The Buxgalteriya TZ (v1.0, 26.11.2026) asks for an accounting section that a non-accountant owner understands in five seconds, while the accountant keeps the professional tools. It also requires that nothing in the books disappears silently: a cancelled document must leave a visible reversal. Until now, unposting, cancelling or deleting a document deleted its journal entries (`JournalService.deleteEntriesForSource`, ADR 0020 / 0024).
+
+## Decision
+1. **Storno instead of deletion.** `JournalService.reverseEntriesForSource` / `reverseEntry` replace the delete methods and are the only way an entry is cancelled. The still-active original (`status = POSTED`, `reversedOfId = null`) is marked `REVERSED`, and a storno entry is written with the same lines, debit and credit swapped, the same source key and **the original's date**, pointing back through `reversedOfId` (unique). Because the storno has the original's date, every period's balances net out exactly as they did when entries were deleted. The closed-period rule (ADR 0024) is still checked against the originals' dates. The original is claimed with a conditional update first, so two concurrent cancels write only one storno. Code that looks up a document's entries filters on `status: 'POSTED', reversedOfId: null`.
+2. **Original currency on journal lines.** `journal_lines.amount` stays the UZS value that every report sums (ADR 0006). `currency` and `amountOrig` record the document side (TZ 15). A line posted without them was measured in UZS. A foreign currency without its amount is refused (ADR 0022).
+3. **Two modes, one ledger.** The section has a simple mode (default) and an accountant mode (default for users with the `accountant` role), remembered per user. The simple mode shows six cards (money, receivables, payables, inventory, profit for the period, net worth), a health banner, movements written as plain sentences, three reports and the accounts in use under their plain alias. It never uses the words debet, kredit, provodka, aylanma or saldo (checked by `accounting-plain-language.spec.ts`). The accountant mode shows the period trial balance (opening, turnover, closing), debit/credit lines, manual entries and the full chart.
+4. **Accounts.** `accounts.alias` (a plain name; defaults per code in `shared/types/accounting.ts`) and `accounts.is_technical` (00 is technical: hidden in the simple mode and kept out of the card totals). An account is deactivated, never deleted. Which accounts feed each balance card is `Company.settings.accounting.cardAccounts` (defaults in `DEFAULT_CARD_ACCOUNTS`), editable with `settings:edit`.
+
+## Consequences
+- The trial balance turnover now includes cancelled documents and their stornos (black storno). Balances are unchanged.
+- Re-posting a document after an unpost creates a new entry next to the old reversed pair, so the journal shows the full history.
+- Deleting a journal entry is not possible through the application. Deleting a tenant still cascades, because the self reference is `ON DELETE NO ACTION`, which is checked at the end of the statement.
+- Out of scope for v1: period closing UI changes, multi-currency reports, tax reports, budgeting (TZ 20).

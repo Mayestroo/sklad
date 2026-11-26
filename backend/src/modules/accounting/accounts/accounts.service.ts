@@ -1,6 +1,18 @@
-import { Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+  Optional,
+} from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../../common/prisma';
-import { CreateAccountDto } from '../dto';
+import { AuditService } from '../../audit/audit.service';
+import { asJson } from '../../../common/utils/json-column';
+import { CreateAccountDto, UpdateAccountDto } from '../dto';
+import {
+  DEFAULT_ACCOUNT_ALIASES,
+  TECHNICAL_ACCOUNT_CODES,
+} from '../../../../../shared/types/accounting';
 
 export const DEFAULT_NAS_ACCOUNTS = [
   {
@@ -233,9 +245,41 @@ export const DEFAULT_NAS_ACCOUNTS = [
   },
 ];
 
+type AccountRow = Prisma.AccountGetPayload<object>;
+
+/** Bilingual name JSON → { uz, ru } when both are non-empty strings. */
+function asNamePair(value: Prisma.JsonValue | null | undefined) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const { uz, ru } = value as Record<string, unknown>;
+  return typeof uz === 'string' &&
+    typeof ru === 'string' &&
+    uz.trim() &&
+    ru.trim()
+    ? { uz: uz.trim(), ru: ru.trim() }
+    : null;
+}
+
+/**
+ * The account as the API shows it: the plain-language alias is the tenant's
+ * own when set, else the default one for the code (TZ 8).
+ */
+export function presentAccount(account: AccountRow, isUsed?: boolean) {
+  const custom = asNamePair(account.alias);
+  return {
+    ...account,
+    alias: custom ?? DEFAULT_ACCOUNT_ALIASES[account.code] ?? null,
+    aliasCustom: Boolean(custom),
+    ...(isUsed === undefined ? {} : { isUsed }),
+  };
+}
+
 @Injectable()
 export class AccountsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    // Optional so scripts and specs can build the service with Prisma alone.
+    @Optional() private readonly audit?: AuditService,
+  ) {}
 
   /**
    * Seed default Uzbekistan NAS Chart of Accounts for a tenant if not present
@@ -262,6 +306,7 @@ export class AccountsService {
               name: acc.name,
               type: acc.type,
               isSystem: acc.isSystem,
+              isTechnical: TECHNICAL_ACCOUNT_CODES.includes(acc.code),
               isActive: true,
             },
           });
@@ -272,23 +317,105 @@ export class AccountsService {
 
   async findAll(tenantId: string) {
     await this.ensureDefaultAccounts(tenantId);
-    return this.prisma.account.findMany({
-      where: { tenantId },
-      orderBy: { code: 'asc' },
-    });
+    const [accounts, used] = await Promise.all([
+      this.prisma.account.findMany({
+        where: { tenantId },
+        orderBy: { code: 'asc' },
+      }),
+      this.usedAccountIds(tenantId),
+    ]);
+    return accounts.map((account) =>
+      presentAccount(account, used.has(account.id)),
+    );
   }
 
-  async create(tenantId: string, dto: CreateAccountDto) {
-    return this.prisma.account.create({
+  /** Ids of accounts that any journal line of the tenant touches. */
+  async usedAccountIds(tenantId: string): Promise<Set<string>> {
+    const where = { entry: { tenantId } };
+    const [debit, credit] = await Promise.all([
+      this.prisma.journalLine.groupBy({ by: ['debitAccountId'], where }),
+      this.prisma.journalLine.groupBy({ by: ['creditAccountId'], where }),
+    ]);
+    return new Set([
+      ...debit.map((row) => row.debitAccountId),
+      ...credit.map((row) => row.creditAccountId),
+    ]);
+  }
+
+  async create(tenantId: string, dto: CreateAccountDto, userId?: string) {
+    const code = dto.code.trim();
+    const duplicate = await this.prisma.account.findFirst({
+      where: { tenantId, code },
+      select: { id: true },
+    });
+    if (duplicate) {
+      throw new BadRequestException(
+        `${code} kodli hisob allaqachon bor / Счёт с кодом ${code} уже существует`,
+      );
+    }
+    const account = await this.prisma.account.create({
       data: {
         tenantId,
-        code: dto.code,
-        name: dto.name,
+        code,
+        name: asJson(dto.name),
+        alias: dto.alias ? asJson(dto.alias) : Prisma.DbNull,
         type: dto.type,
         isSystem: false,
+        isTechnical: false,
         isActive: true,
       },
     });
+    await this.audit?.logAction({
+      tenantId,
+      userId,
+      entityType: 'Account',
+      entityId: account.id,
+      action: 'CREATE',
+      newValue: {
+        code,
+        name: dto.name,
+        type: dto.type,
+        alias: dto.alias ?? null,
+      },
+    });
+    return presentAccount(account, false);
+  }
+
+  /**
+   * Plain-language alias and active flag (TZ 8). The code, official name and
+   * type never change; an account is deactivated, never deleted.
+   */
+  async update(
+    tenantId: string,
+    id: string,
+    dto: UpdateAccountDto,
+    userId?: string,
+  ) {
+    const account = await this.prisma.account.findFirst({
+      where: { id, tenantId },
+    });
+    if (!account) {
+      throw new NotFoundException('Hisob topilmadi / Счёт не найден');
+    }
+    const data: Prisma.AccountUpdateInput = {};
+    if (dto.alias !== undefined) {
+      data.alias = dto.alias === null ? Prisma.DbNull : asJson(dto.alias);
+    }
+    if (dto.isActive !== undefined) data.isActive = dto.isActive;
+    const updated = await this.prisma.account.update({
+      where: { id: account.id, tenantId },
+      data,
+    });
+    await this.audit?.logAction({
+      tenantId,
+      userId,
+      entityType: 'Account',
+      entityId: account.id,
+      action: 'UPDATE',
+      oldValue: { alias: account.alias, isActive: account.isActive },
+      newValue: { alias: updated.alias, isActive: updated.isActive },
+    });
+    return presentAccount(updated);
   }
 
   async findByCode(tenantId: string, code: string) {

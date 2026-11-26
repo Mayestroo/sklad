@@ -60,7 +60,7 @@ describe('ProductionService', () => {
       auditService as unknown as AuditService,
       {
         createJournalEntry: jest.fn(),
-        deleteEntriesForSource: jest.fn(),
+        reverseEntriesForSource: jest.fn(),
       } as unknown as JournalService,
     );
   });

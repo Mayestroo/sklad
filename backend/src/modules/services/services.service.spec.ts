@@ -60,7 +60,7 @@ describe('ServicesService Unit Tests', () => {
 
     journalService = {
       autoPostServiceAct: jest.fn().mockResolvedValue(undefined),
-      deleteEntriesForSource: jest.fn(
+      reverseEntriesForSource: jest.fn(
         (
           db: typeof prisma,
           tenantId: string,

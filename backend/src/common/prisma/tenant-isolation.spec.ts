@@ -467,6 +467,7 @@ describe('tenant isolation', () => {
 
     await expect(
       service.createManualEntry('A', {
+        date: '2026-11-26',
         description: 'manual',
         lines: [
           {

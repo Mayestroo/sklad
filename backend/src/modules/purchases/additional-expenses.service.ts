@@ -1396,7 +1396,7 @@ export class AdditionalExpensesService {
       }
 
       // 3. Delete or void linked journal entries
-      await this.journalService.deleteEntriesForSource(
+      await this.journalService.reverseEntriesForSource(
         tx,
         tenantId,
         'AdditionalExpense',

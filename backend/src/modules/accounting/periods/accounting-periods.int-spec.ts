@@ -78,17 +78,23 @@ describe('Accounting period closing (integration)', () => {
   });
 
   const manualEntry = (date: string, sourceDocId: string) =>
-    journal.createManualEntry(tenantId, {
-      description: 'period test ' + sourceDocId,
-      sourceDocType: 'PeriodTest',
-      sourceDocId,
-      entryDate: new Date(date),
-      lines: [{ debitAccountId, creditAccountId, amount: 1000 }],
-    });
+    prisma.$transaction((tx) =>
+      journal.createJournalEntry(
+        tenantId,
+        {
+          description: 'period test ' + sourceDocId,
+          sourceDocType: 'PeriodTest',
+          sourceDocId,
+          entryDate: new Date(date),
+          lines: [{ debitAccountId, creditAccountId, amount: 1000 }],
+        },
+        tx,
+      ),
+    );
 
   const deleteEntries = (sourceDocId: string) =>
     prisma.$transaction((tx) =>
-      journal.deleteEntriesForSource(
+      journal.reverseEntriesForSource(
         tx,
         tenantId,
         'PeriodTest',

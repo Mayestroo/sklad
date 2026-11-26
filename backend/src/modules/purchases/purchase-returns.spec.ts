@@ -758,13 +758,18 @@ describe('Purchase Returns (Yetkazib Beruvchiga Qaytarish) Comprehensive Invaria
       });
 
       // 6. Linked journal entries deleted
-      expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
-        where: {
-          tenantId,
-          sourceDocType: 'PurchaseReturn',
-          sourceDocId: 'ret-cancel-test',
-        },
-      });
+      // Storno (TZ 10.2): the active entries of the document are looked up and
+      // reversed, never deleted.
+      expect(prisma.journalEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId,
+            sourceDocType: 'PurchaseReturn',
+            sourceDocId: 'ret-cancel-test',
+          }),
+        }),
+      );
+      expect(prisma.journalEntry.deleteMany).not.toHaveBeenCalled();
     });
 
     it('should block cancellation if linked cash refund transactions exist in Finance', async () => {

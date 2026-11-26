@@ -996,7 +996,7 @@ export class OpeningBalancesService {
         });
       }
 
-      await this.journalService.deleteEntriesForSource(
+      await this.journalService.reverseEntriesForSource(
         tx,
         tenantId,
         'OpeningBalanceDocument',
