@@ -1,57 +1,71 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
+import { screen } from '@testing-library/react';
 import { renderPage } from '@/test/render-page';
 
 const apiFetch = vi.fn();
 vi.mock('@/lib/api', () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
-const auth = { token: 'tok', company: { id: 'tenant-1' } };
+const auth = { token: 'tok', company: { id: 'tenant-1' }, user: { id: 'u1' }, hasRole: () => false, hasPermission: () => true };
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth }));
+vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock('next-intl', () => ({
   useLocale: () => 'uz',
   useTranslations: () => (key: string) => key,
 }));
 
-import ChartOfAccountsPage from './page';
+import AccountsPage from './page';
 
+const account = (code: string, extra: Record<string, unknown>) => ({
+  id: `acc-${code}`,
+  tenantId: 'tenant-1',
+  code,
+  name: { uz: `Rasmiy ${code}`, ru: `Официальный ${code}` },
+  alias: null,
+  type: 'ASSET',
+  isSystem: true,
+  isTechnical: false,
+  isActive: true,
+  isUsed: true,
+  createdAt: '',
+  updatedAt: '',
+  ...extra,
+});
 const accounts = [
-  { id: 'a1', code: '5010', name: { uz: 'Kassa', ru: 'Касса' }, type: 'ASSET', isActive: true },
-  { id: 'a2', code: '6010', name: { uz: 'Yetkazib beruvchilar', ru: 'Поставщики' }, type: 'LIABILITY', isActive: true },
+  account('5020', { alias: { uz: 'Valyuta kassasi', ru: 'Валютная касса' } }),
+  account('00', { type: 'EQUITY', isTechnical: true, alias: { uz: 'Texnik hisob', ru: 'Тех' } }),
+  account('2920', { isUsed: false, alias: { uz: 'Yo‘ldagi tovar', ru: 'Товары в пути' } }),
 ];
 
-describe('Chart of accounts page', () => {
+function route(endpoint: string) {
+  if (endpoint === '/accounting/accounts') return Promise.resolve(accounts);
+  return Promise.resolve({ items: [], totalDebitTurnover: 0, totalCreditTurnover: 0 });
+}
+
+describe('Accounts page', () => {
   beforeEach(() => {
-    // Filters live in the URL and localStorage: each test starts from a clean view.
     window.history.replaceState(null, '', '/');
     window.localStorage.clear();
+    window.localStorage.setItem('sklad.ui.accounting.intro.u1', 'true');
     apiFetch.mockReset();
   });
 
-  it('loads the accounts of the current tenant', async () => {
-    apiFetch.mockResolvedValue(accounts);
-    renderPage(<ChartOfAccountsPage />);
+  it('shows only accounts in use by their plain name in the simple mode, official name small', async () => {
+    apiFetch.mockImplementation(route);
+    renderPage(<AccountsPage />);
 
-    expect(screen.getByText('loading')).toBeTruthy();
-    expect(await screen.findByText('5010')).toBeTruthy();
-    expect(screen.getByText('6010')).toBeTruthy();
-    expect(apiFetch).toHaveBeenCalledTimes(1);
-    expect(apiFetch).toHaveBeenCalledWith(
-      '/accounting/accounts',
-      expect.objectContaining({ token: 'tok', tenantId: 'tenant-1', locale: 'uz' }),
-    );
+    expect(await screen.findByText('Valyuta kassasi')).toBeTruthy();
+    expect(screen.getByText('5020 · Rasmiy 5020')).toBeTruthy();
+    expect(screen.queryByText('Texnik hisob')).toBeNull();
+    expect(screen.queryByText('Yo‘ldagi tovar')).toBeNull();
   });
 
-  it('shows the error and reloads on retry', async () => {
-    apiFetch.mockRejectedValueOnce(new Error('Server down'));
-    renderPage(<ChartOfAccountsPage />);
+  it('shows the full chart with the technical mark in the accountant mode', async () => {
+    window.localStorage.setItem('sklad.ui.accounting.mode.u1', '"accountant"');
+    apiFetch.mockImplementation(route);
+    renderPage(<AccountsPage />);
 
-    const alert = await screen.findByRole('alert');
-    expect(alert.textContent).toContain('Server down');
-
-    apiFetch.mockResolvedValueOnce(accounts);
-    fireEvent.click(screen.getByRole('button', { name: 'Qayta urinish' }));
-
-    expect(await screen.findByText('5010')).toBeTruthy();
-    await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
-    expect(screen.queryByRole('alert')).toBeNull();
+    expect(await screen.findByText('Rasmiy 00')).toBeTruthy();
+    expect(screen.getByText('accounts.technical')).toBeTruthy();
+    expect(screen.getByText('Rasmiy 2920')).toBeTruthy();
+    expect(screen.getByRole('button', { name: /accounts\.add/ })).toBeTruthy();
   });
 });

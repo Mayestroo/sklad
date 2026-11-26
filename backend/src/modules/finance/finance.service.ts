@@ -1373,12 +1373,16 @@ export class FinanceService {
       debitAccountId: string;
       creditAccountId: string;
       amount: number;
+      currency?: string;
+      amountOrig?: number;
       description: string;
     }> = [
       {
         debitAccountId: isIncome ? cash.id : counter.id,
         creditAccountId: isIncome ? counter.id : cash.id,
         amount: Math.min(cashUzs, counterUzs),
+        currency,
+        amountOrig: amount,
         description: `${label}: ${amount} ${currency}${rateNote}`,
       },
     ];
@@ -1491,6 +1495,8 @@ export class FinanceService {
             debitAccountId: to.id,
             creditAccountId: from.id,
             amount: valueUzs,
+            currency: fromAccount.currency,
+            amountOrig: fromAmount,
             description: `${fromAmount} ${fromAccount.currency} → ${toAmount} ${toAccount.currency}`,
           },
         ],
@@ -2501,6 +2507,8 @@ export class FinanceService {
         sourceDocType: 'PurchasePayment',
         sourceDocId: existing.sourceDocId,
         entryDate: existing.transactionDate,
+        status: 'POSTED',
+        reversedOfId: null,
       },
       select: { id: true, lines: { select: { description: true } } },
       orderBy: { entryNumber: 'asc' },
@@ -2509,7 +2517,7 @@ export class FinanceService {
       entry.lines.some((line) => line.description?.endsWith(amountLabel)),
     );
     if (match) {
-      await this.journalService.deleteEntry(tx, tenantId, match.id, action);
+      await this.journalService.reverseEntry(tx, tenantId, match.id, action);
     }
   }
 
@@ -2578,7 +2586,7 @@ export class FinanceService {
       // cash and settlement are reversed, that entry must go too or the
       // ledger keeps money the cash account no longer has.
       if (existing.sourceDocType === 'PAYMENT' && existing.sourceDocId) {
-        await this.journalService.deleteEntriesForSource(
+        await this.journalService.reverseEntriesForSource(
           tx,
           tenantId,
           'Payment',
@@ -2633,7 +2641,7 @@ export class FinanceService {
 
     // Entries this transaction posted itself (none for rows created before
     // Finance posted journals, or by modules that post their own).
-    await this.journalService.deleteEntriesForSource(
+    await this.journalService.reverseEntriesForSource(
       tx,
       tenantId,
       FINANCE_JOURNAL_SOURCE,
@@ -2770,6 +2778,8 @@ export class FinanceService {
         tenantId,
         sourceDocType: FINANCE_JOURNAL_SOURCE,
         sourceDocId: { in: candidates.map((item) => item.id) },
+        status: 'POSTED',
+        reversedOfId: null,
       },
       select: { sourceDocId: true },
     });

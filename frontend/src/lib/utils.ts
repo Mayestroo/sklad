@@ -92,7 +92,7 @@ export function formatPriceOrUnset(
 }
 
 /** Journal lines and the accounting reports are always in UZS (ADR 0006); a defined currency, not a fallback. */
-export const LEDGER_CURRENCY = 'UZS';
+export const LEDGER_CURRENCY = 'UZS'; // same value as shared/types/accounting LEDGER_CURRENCY (node --test cannot load that file)
 
 /**
  * Valyuta select opsiyalari — butun loyihada SHU konstantani ishlating.

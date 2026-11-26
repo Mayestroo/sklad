@@ -24,9 +24,9 @@ describe('FinanceService Settlement Unit Test Suite', () => {
   let prisma: any;
   let settlementService: { recordMovement: jest.Mock };
   let journalService: {
-    deleteEntriesForSource: jest.Mock;
+    reverseEntriesForSource: jest.Mock;
     createJournalEntry: jest.Mock;
-    deleteEntry?: jest.Mock;
+    reverseEntry?: jest.Mock;
   };
   let allocationService: {
     recordAllocation: jest.Mock;
@@ -35,7 +35,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
 
   beforeEach(async () => {
     journalService = {
-      deleteEntriesForSource: jest.fn().mockResolvedValue(undefined),
+      reverseEntriesForSource: jest.fn().mockResolvedValue(undefined),
       createJournalEntry: jest.fn().mockResolvedValue({ id: 'je-1' }),
     };
     settlementService = {
@@ -1201,7 +1201,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
 
       await service.cancelTransaction('tenant-1', 'tx-pay');
 
-      expect(journalService.deleteEntriesForSource).toHaveBeenCalledWith(
+      expect(journalService.reverseEntriesForSource).toHaveBeenCalledWith(
         prisma,
         'tenant-1',
         'Payment',
@@ -1260,7 +1260,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
         totalAmount: 500,
         paidAmount: 500,
       });
-      journalService.deleteEntry = jest.fn().mockResolvedValue(undefined);
+      journalService.reverseEntry = jest.fn().mockResolvedValue(undefined);
 
       await service.cancelTransaction('tenant-1', 'tx-legacy');
 
@@ -1271,11 +1271,13 @@ describe('FinanceService Settlement Unit Test Suite', () => {
             sourceDocType: 'PurchasePayment',
             sourceDocId: 'rcp-1',
             entryDate: paidOn,
+            status: 'POSTED',
+            reversedOfId: null,
           },
         }),
       );
-      expect(journalService.deleteEntry).toHaveBeenCalledTimes(1);
-      expect(journalService.deleteEntry).toHaveBeenCalledWith(
+      expect(journalService.reverseEntry).toHaveBeenCalledTimes(1);
+      expect(journalService.reverseEntry).toHaveBeenCalledWith(
         prisma,
         'tenant-1',
         'je-mine',
@@ -1413,7 +1415,7 @@ describe('FinanceService Settlement Unit Test Suite', () => {
 
       await service.cancelTransaction('tenant-1', 'tx-plain');
 
-      expect(journalService.deleteEntriesForSource).toHaveBeenCalledWith(
+      expect(journalService.reverseEntriesForSource).toHaveBeenCalledWith(
         prisma,
         'tenant-1',
         'FinanceTransaction',

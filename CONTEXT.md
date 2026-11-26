@@ -273,6 +273,14 @@ _Avoid_: Orphan payment unlink, forced service delete, silent de-reconciliation
 The automated creation of National Accounting Standards (BHMS/NAS) double-entry records (e.g. Debit 2910, Debit 4410, Credit 6010 for purchases; Debit 4010, Credit 9010, Debit 9110, Credit 2910 for sales) triggered by operational document status changes without manual user accounting intervention.
 _Avoid_: Manual debit-credit, voucher posting, provodka input
 
+**Storno (Reversal Entry)**:
+The journal entry that cancels another one when its document is unposted, cancelled or deleted: same lines with debit and credit swapped, same date and source, linked by `reversedOfId`. The original is marked `REVERSED`; nothing is deleted (ADR 0027).
+_Avoid_: Deleted entry, journal cleanup, silent rollback
+
+**Simple Mode / Accountant Mode**:
+The two views of the accounting section (ADR 0027). The simple mode answers the owner's questions in plain words (money, debts, stock, profit, net worth) without accounting terms; the accountant mode shows the trial balance, debit/credit lines and manual entries.
+_Avoid_: Basic/advanced accounting, lite ledger
+
 **Accounting Period**:
 A UTC calendar month of one tenant's books, `OPEN` or `CLOSED` (ADR 0024). While it is closed, nothing dated in it may be posted, unposted, cancelled, or have journal entries created or deleted; reopening needs `accounting:reopen`.
 _Avoid_: Lock date, books-closed date, fiscal lock

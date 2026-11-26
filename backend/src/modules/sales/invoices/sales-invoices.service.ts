@@ -822,7 +822,7 @@ export class SalesInvoicesService {
       });
 
       // Remove journal entries
-      await this.journalService.deleteEntriesForSource(
+      await this.journalService.reverseEntriesForSource(
         tx,
         tenantId,
         'SalesInvoice',
@@ -1754,6 +1754,8 @@ export class SalesInvoicesService {
           tenantId,
           sourceDocType: 'SalesReturn',
           sourceDocId: existing.id,
+          status: 'POSTED',
+          reversedOfId: null,
         },
         include: { lines: true },
         orderBy: { createdAt: 'asc' },

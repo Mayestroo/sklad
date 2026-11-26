@@ -1,7 +1,12 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
+import { AuditService } from '../../audit/audit.service';
 import { PrismaService } from '../../../common/prisma';
 import { AccountsService } from '../accounts/accounts.service';
-import { CreateJournalEntryDto, JournalLineDto } from '../dto';
+import {
+  CreateJournalEntryDto,
+  JournalLineDto,
+  ManualJournalEntryDto,
+} from '../dto';
 import { ledgerAccountCodeForCashAccount } from '../../../../../shared/types/cash-account-policy';
 import { CashAccountType, PaymentMethod, Prisma } from '@prisma/client';
 import {
@@ -14,6 +19,63 @@ import {
   assertPeriodOpen,
   PeriodAction,
 } from '../../../common/accounting-period/period-lock';
+import {
+  JOURNAL_SOURCE_GROUPS,
+  LEDGER_CURRENCY,
+  type JournalSourceGroup,
+} from '../../../../../shared/types/accounting';
+
+export interface JournalQuery {
+  from?: string;
+  to?: string;
+  /** A JournalSourceGroup ('sales', 'purchases', ...) or one sourceDocType. */
+  source?: string;
+  sourceDocId?: string;
+  accountCode?: string;
+  q?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+/** Lines with both accounts, and the storno link either way. */
+export const JOURNAL_ENTRY_INCLUDE = {
+  lines: { include: { debitAccount: true, creditAccount: true } },
+  reversedOf: { select: { id: true, entryNumber: true } },
+  reversal: { select: { id: true, entryNumber: true } },
+} satisfies Prisma.JournalEntryInclude;
+
+/**
+ * Inclusive day range on a timestamp column: "2026-11-01".."2026-11-30" keeps
+ * the whole of the 30th. Bad dates are refused, not ignored (ADR 0022).
+ */
+export function dateRangeFilter(
+  from?: string,
+  to?: string,
+): Prisma.DateTimeFilter | undefined {
+  if (!from && !to) return undefined;
+  const filter: Prisma.DateTimeFilter = {};
+  if (from) filter.gte = parseDay(from, 'from');
+  if (to) filter.lt = dayAfter(parseDay(to, 'to'));
+  return filter;
+}
+
+export function dayAfter(date: Date): Date {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + 1);
+  return next;
+}
+
+export function parseDay(value: string, field: string): Date {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? new Date(`${value}T00:00:00.000Z`)
+    : null;
+  if (!date || Number.isNaN(date.getTime())) {
+    throw new BadRequestException(
+      `Sana noto'g'ri (${field}: YYYY-MM-DD) / Неверная дата (${field}: YYYY-MM-DD)`,
+    );
+  }
+  return date;
+}
 
 interface CashPaymentForJournal {
   id: string;
@@ -81,18 +143,35 @@ export type JournalWriter = Pick<
 export type JournalEntryInput = CreateJournalEntryDto & { entryDate: Date };
 
 /**
- * A journal entry typed in by a user. It has no source document, so when the
- * user gives no date it is dated when it is entered.
+ * The document-currency side of a journal line (TZ 15: amount_orig, currency).
+ * `amount` is always the UZS value (ADR 0006). A line posted without an
+ * original currency was measured in UZS, so its original amount is that UZS
+ * amount — that is the ledger's own currency, not a guessed one. A foreign
+ * currency without its amount is refused (ADR 0022).
  */
-export type ManualJournalEntryInput = CreateJournalEntryDto & {
-  entryDate?: Date;
-};
+export function lineOriginalAmount(line: {
+  amount: number;
+  currency?: string;
+  amountOrig?: number;
+}): { currency: string; amountOrig: number } {
+  if (!line.currency || line.currency === LEDGER_CURRENCY) {
+    return { currency: LEDGER_CURRENCY, amountOrig: line.amount };
+  }
+  if (line.amountOrig === undefined || !(Number(line.amountOrig) > 0)) {
+    throw new BadRequestException(
+      `Provodka satrida ${line.currency} summasi ko'rsatilmagan / В строке проводки не указана сумма в ${line.currency}`,
+    );
+  }
+  return { currency: line.currency, amountOrig: Number(line.amountOrig) };
+}
 
 @Injectable()
 export class JournalService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly accountsService: AccountsService,
+    // Optional so scripts and specs can build the service without it.
+    @Optional() private readonly audit?: AuditService,
   ) {}
 
   /**
@@ -106,22 +185,53 @@ export class JournalService {
    * Automatic postings resolve accounts by code within the tenant and call
    * createJournalEntry directly.
    */
-  async createManualEntry(tenantId: string, dto: ManualJournalEntryInput) {
+  async createManualEntry(
+    tenantId: string,
+    dto: ManualJournalEntryDto,
+    userId?: string,
+  ) {
+    const lines = dto.lines ?? [];
+    if (lines.length === 0) {
+      throw new BadRequestException(
+        "Provodkada kamida bitta satr bo'lishi kerak / В проводке должна быть хотя бы одна строка",
+      );
+    }
+    if (lines.some((line) => line.debitAccountId === line.creditAccountId)) {
+      throw new BadRequestException(
+        "Debet va kredit hisobi bir xil bo'lmasligi kerak / Дебет и кредит не могут быть одним счётом",
+      );
+    }
     await assertTenantOwned(this.prisma, tenantId, {
-      account: (dto.lines ?? []).flatMap((line) => [
+      account: lines.flatMap((line) => [
         line.debitAccountId,
         line.creditAccountId,
       ]),
     });
+    const entryDate = parseDay(dto.date, 'date');
     // In a transaction so the period lock taken by createJournalEntry is
     // held until the entry commits (a concurrent close waits for it).
-    return this.prisma.$transaction((tx) =>
+    // A manual entry has no source document.
+    const entry = await this.prisma.$transaction((tx) =>
       this.createJournalEntry(
         tenantId,
-        { ...dto, entryDate: dto.entryDate ?? new Date() },
+        { description: dto.description, lines, entryDate },
         tx,
       ),
     );
+    await this.audit?.logAction({
+      tenantId,
+      userId,
+      entityType: 'JournalEntry',
+      entityId: entry.id,
+      action: 'CREATE',
+      newValue: {
+        entryNumber: entry.entryNumber,
+        date: dto.date,
+        description: dto.description,
+        lines,
+      },
+    });
+    return entry;
   }
 
   async createJournalEntry(
@@ -159,12 +269,17 @@ export class JournalService {
         sourceDocType: dto.sourceDocType || null,
         sourceDocId: dto.sourceDocId || null,
         lines: {
-          create: dto.lines.map((line) => ({
-            debitAccountId: line.debitAccountId,
-            creditAccountId: line.creditAccountId,
-            amount: line.amount,
-            description: line.description || null,
-          })),
+          create: dto.lines.map((line) => {
+            const original = lineOriginalAmount(line);
+            return {
+              debitAccountId: line.debitAccountId,
+              creditAccountId: line.creditAccountId,
+              amount: line.amount,
+              currency: original.currency,
+              amountOrig: original.amountOrig,
+              description: line.description || null,
+            };
+          }),
         },
       },
       include: {
@@ -179,52 +294,102 @@ export class JournalService {
   }
 
   /**
-   * Removes the journal entries of one source document (unposting,
-   * cancelling or deleting it). The only way entries are deleted, so the
-   * closed-period rule (D4) is checked here for the dates of the entries
-   * being removed. Lines go with their entry (ON DELETE CASCADE).
+   * Cancels the journal entries of one source document (unposting,
+   * cancelling or deleting it) with storno entries: nothing is deleted
+   * (Buxgalteriya TZ 10.2). Each still-active original is marked REVERSED and
+   * gets a storno entry with the same lines, debit and credit swapped, dated
+   * like the original so every period's balances net out exactly as before.
+   * The closed-period rule (D4) is checked for the originals' dates.
    */
-  async deleteEntriesForSource(
+  async reverseEntriesForSource(
     db: JournalWriter,
     tenantId: string,
     sourceDocType: string,
     sourceDocId: string,
     action: PeriodAction,
   ): Promise<void> {
-    const where = { tenantId, sourceDocType, sourceDocId };
     const entries = await db.journalEntry.findMany({
-      where,
-      select: { entryDate: true },
-    });
-    if (entries.length > 0) {
-      await assertPeriodOpen(
-        db,
+      where: {
         tenantId,
-        entries.map((entry) => entry.entryDate),
-        action,
-      );
+        sourceDocType,
+        sourceDocId,
+        status: 'POSTED',
+        reversedOfId: null,
+      },
+      include: { lines: true },
+      orderBy: { entryNumber: 'asc' },
+    });
+    if (entries.length === 0) return;
+    await assertPeriodOpen(
+      db,
+      tenantId,
+      entries.map((entry) => entry.entryDate),
+      action,
+    );
+    for (const entry of entries) {
+      await this.writeStorno(db, tenantId, entry);
     }
-    await db.journalEntry.deleteMany({ where });
   }
 
   /**
-   * Removes one journal entry, for sources that share a key across several
-   * entries (legacy purchase payments were keyed by their receipt). Same
-   * closed-period rule (D4) as deleteEntriesForSource.
+   * Cancels one journal entry with a storno entry, for sources that share a
+   * key across several entries (legacy purchase payments were keyed by their
+   * receipt). Same closed-period rule (D4) as reverseEntriesForSource.
    */
-  async deleteEntry(
+  async reverseEntry(
     db: JournalWriter,
     tenantId: string,
     entryId: string,
     action: PeriodAction,
   ): Promise<void> {
     const entry = await db.journalEntry.findFirst({
-      where: { id: entryId, tenantId },
-      select: { entryDate: true },
+      where: { id: entryId, tenantId, status: 'POSTED', reversedOfId: null },
+      include: { lines: true },
     });
     if (!entry) return;
     await assertPeriodOpen(db, tenantId, [entry.entryDate], action);
-    await db.journalEntry.deleteMany({ where: { id: entryId, tenantId } });
+    await this.writeStorno(db, tenantId, entry);
+  }
+
+  private async writeStorno(
+    db: JournalWriter,
+    tenantId: string,
+    entry: Prisma.JournalEntryGetPayload<{ include: { lines: true } }>,
+  ): Promise<void> {
+    // Claim the original first: a concurrent cancel of the same document
+    // finds it already REVERSED and writes no second storno.
+    const claimed = await db.journalEntry.updateMany({
+      where: { id: entry.id, tenantId, status: 'POSTED' },
+      data: { status: 'REVERSED' },
+    });
+    if (claimed.count === 0) return;
+    const entryNumber = await nextDocumentNumber(
+      db,
+      tenantId,
+      'JOURNAL_ENTRY',
+      entry.entryDate,
+    );
+    await db.journalEntry.create({
+      data: {
+        tenantId,
+        entryNumber,
+        entryDate: entry.entryDate,
+        description: `Storno (${entry.entryNumber}): ${entry.description}`,
+        sourceDocType: entry.sourceDocType,
+        sourceDocId: entry.sourceDocId,
+        reversedOfId: entry.id,
+        lines: {
+          create: entry.lines.map((line) => ({
+            debitAccountId: line.creditAccountId,
+            creditAccountId: line.debitAccountId,
+            amount: line.amount,
+            currency: line.currency,
+            amountOrig: line.amountOrig,
+            description: line.description,
+          })),
+        },
+      },
+    });
   }
 
   /**
@@ -291,11 +456,13 @@ export class JournalService {
       payment.currency === 'USD'
         ? ` (to'lov kursi: 1 USD = ${exchangeRate} UZS, hujjat kursi: 1 USD = ${documentExchangeRate} UZS)`
         : '';
-    const journalLines = [
+    const journalLines: JournalLineDto[] = [
       {
         debitAccountId: accBank.id,
         creditAccountId: acc4010.id,
         amount: Math.min(cashAmountInUzs, receivableReductionInUzs),
+        currency: payment.currency,
+        amountOrig: Number(payment.amount),
         description: `Mijozdan to'lov (${payment.method})`,
       },
     ];
@@ -451,19 +618,87 @@ export class JournalService {
     );
   }
 
-  async findAllByTenant(tenantId: string) {
-    return this.prisma.journalEntry.findMany({
-      where: { tenantId },
-      include: {
+  /**
+   * The journal for one tenant, newest first, filtered and paged
+   * (GET /api/accounting/journal). `accountCode` keeps entries that touch
+   * that account; `q` matches the entry number, description, an account
+   * code or an amount.
+   */
+  async findEntries(tenantId: string, query: JournalQuery = {}) {
+    const page = Math.max(1, Math.floor(query.page ?? 1));
+    const pageSize = Math.min(
+      200,
+      Math.max(1, Math.floor(query.pageSize ?? 50)),
+    );
+    const and: Prisma.JournalEntryWhereInput[] = [{ tenantId }];
+    const range = dateRangeFilter(query.from, query.to);
+    if (range) and.push({ entryDate: range });
+    if (query.source) {
+      if (query.source === 'other') {
+        const known = Object.values(JOURNAL_SOURCE_GROUPS).flat();
+        and.push({
+          OR: [{ sourceDocType: null }, { sourceDocType: { notIn: known } }],
+        });
+      } else if (query.source in JOURNAL_SOURCE_GROUPS) {
+        const group = query.source as Exclude<JournalSourceGroup, 'other'>;
+        and.push({ sourceDocType: { in: JOURNAL_SOURCE_GROUPS[group] } });
+      } else {
+        and.push({ sourceDocType: query.source });
+      }
+    }
+    if (query.sourceDocId) and.push({ sourceDocId: query.sourceDocId });
+    // One code or several, comma-separated (a card's accounts).
+    const codes = (query.accountCode ?? '')
+      .split(',')
+      .map((code) => code.trim())
+      .filter(Boolean);
+    if (codes.length > 0) {
+      and.push({
         lines: {
-          include: {
-            debitAccount: true,
-            creditAccount: true,
+          some: {
+            OR: [
+              { debitAccount: { code: { in: codes } } },
+              { creditAccount: { code: { in: codes } } },
+            ],
           },
         },
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+      });
+    }
+    const q = query.q?.trim();
+    if (q) {
+      const or: Prisma.JournalEntryWhereInput[] = [
+        { entryNumber: { contains: q, mode: 'insensitive' } },
+        { description: { contains: q, mode: 'insensitive' } },
+        {
+          lines: {
+            some: {
+              OR: [
+                { debitAccount: { code: q } },
+                { creditAccount: { code: q } },
+                { description: { contains: q, mode: 'insensitive' } },
+              ],
+            },
+          },
+        },
+      ];
+      const amount = Number(q.replace(/[\s\u00a0]/g, '').replace(',', '.'));
+      if (Number.isFinite(amount) && amount > 0) {
+        or.push({ lines: { some: { amount } } });
+      }
+      and.push({ OR: or });
+    }
+    const where: Prisma.JournalEntryWhereInput = { AND: and };
+    const [items, total] = await Promise.all([
+      this.prisma.journalEntry.findMany({
+        where,
+        include: JOURNAL_ENTRY_INCLUDE,
+        orderBy: [{ entryDate: 'desc' }, { entryNumber: 'desc' }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      this.prisma.journalEntry.count({ where }),
+    ]);
+    return { items, total, page, pageSize };
   }
 
   /**

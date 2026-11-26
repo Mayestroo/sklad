@@ -801,13 +801,18 @@ describe('SalesInvoicesService Unit & Invariant Test Suite', () => {
         data: { remainingQty: { increment: 4 } },
       });
       expect(prisma.batchConsumption.deleteMany).toHaveBeenCalled();
-      expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
-        where: {
-          tenantId: 'tenant-1',
-          sourceDocType: 'SalesInvoice',
-          sourceDocId: 'inv-1',
-        },
-      });
+      // Storno (TZ 10.2): the active entries of the document are looked up and
+      // reversed, never deleted.
+      expect(prisma.journalEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId: 'tenant-1',
+            sourceDocType: 'SalesInvoice',
+            sourceDocId: 'inv-1',
+          }),
+        }),
+      );
+      expect(prisma.journalEntry.deleteMany).not.toHaveBeenCalled();
       expect(settlementService.recordMovement).toHaveBeenCalledWith(
         expect.anything(),
         expect.objectContaining({

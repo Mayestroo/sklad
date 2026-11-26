@@ -1,6 +1,6 @@
 import { PrismaService } from '../../../common/prisma';
 import { AccountsService } from '../accounts/accounts.service';
-import { JournalService } from './journal.service';
+import { JournalService, lineOriginalAmount } from './journal.service';
 
 jest.mock('../../../common/sequences/document-sequence');
 jest.mock('../../../common/accounting-period/period-lock');
@@ -281,5 +281,108 @@ describe('JournalService entry dates', () => {
       vatAmount: 12,
     });
     expect(postedEntryDate()).toEqual(documentDate);
+  });
+});
+
+describe('JournalService storno (TZ 10.2)', () => {
+  const original = {
+    id: 'je-1',
+    tenantId: 'tenant-1',
+    entryNumber: 'JE-2026-00001',
+    entryDate: new Date('2026-11-05T00:00:00.000Z'),
+    description: 'Sotuv № 7',
+    sourceDocType: 'SalesInvoice',
+    sourceDocId: 'inv-7',
+    status: 'POSTED',
+    reversedOfId: null,
+    lines: [
+      {
+        debitAccountId: 'acc-4010',
+        creditAccountId: 'acc-9010',
+        amount: 500,
+        currency: 'USD',
+        amountOrig: 0.04,
+        description: 'revenue',
+      },
+    ],
+  };
+
+  function storno(claimed = 1) {
+    const db = {
+      journalEntry: {
+        findMany: jest.fn().mockResolvedValue([original]),
+        findFirst: jest.fn().mockResolvedValue(original),
+        updateMany: jest.fn().mockResolvedValue({ count: claimed }),
+        create: jest.fn().mockResolvedValue({ id: 'je-2' }),
+        deleteMany: jest.fn(),
+      },
+    };
+    const service = new JournalService(
+      db as unknown as PrismaService,
+      {} as AccountsService,
+    );
+    return { db, service };
+  }
+
+  it('reverses a cancelled document with swapped lines on the same date, deleting nothing', async () => {
+    const { db, service } = storno();
+    await service.reverseEntriesForSource(
+      db as never,
+      'tenant-1',
+      'SalesInvoice',
+      'inv-7',
+      'unpost',
+    );
+
+    expect(db.journalEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          tenantId: 'tenant-1',
+          sourceDocType: 'SalesInvoice',
+          sourceDocId: 'inv-7',
+          status: 'POSTED',
+          reversedOfId: null,
+        },
+      }),
+    );
+    expect(db.journalEntry.updateMany).toHaveBeenCalledWith({
+      where: { id: 'je-1', tenantId: 'tenant-1', status: 'POSTED' },
+      data: { status: 'REVERSED' },
+    });
+    const data = db.journalEntry.create.mock.calls[0][0].data;
+    expect(data).toMatchObject({
+      tenantId: 'tenant-1',
+      entryDate: original.entryDate,
+      sourceDocType: 'SalesInvoice',
+      sourceDocId: 'inv-7',
+      reversedOfId: 'je-1',
+    });
+    expect(data.lines.create).toEqual([
+      {
+        debitAccountId: 'acc-9010',
+        creditAccountId: 'acc-4010',
+        amount: 500,
+        currency: 'USD',
+        amountOrig: 0.04,
+        description: 'revenue',
+      },
+    ]);
+    expect(db.journalEntry.deleteMany).not.toHaveBeenCalled();
+  });
+
+  it('writes no second storno when the entry was already reversed concurrently', async () => {
+    const { db, service } = storno(0);
+    await service.reverseEntry(db as never, 'tenant-1', 'je-1', 'cancel');
+    expect(db.journalEntry.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('lineOriginalAmount (TZ 15)', () => {
+  it('keeps the UZS amount as the original for a UZS line', () => {
+    expect(lineOriginalAmount({ amount: 1000 })).toEqual({ currency: 'UZS', amountOrig: 1000 });
+  });
+  it('keeps a foreign original amount and refuses one without it', () => {
+    expect(lineOriginalAmount({ amount: 128000, currency: 'USD', amountOrig: 10 })).toEqual({ currency: 'USD', amountOrig: 10 });
+    expect(() => lineOriginalAmount({ amount: 128000, currency: 'USD' })).toThrow();
   });
 });

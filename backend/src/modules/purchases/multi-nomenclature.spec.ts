@@ -467,13 +467,18 @@ describe('Ticket #107: Multi-Nomenclature Purchase Lifecycle & Invariant Test Su
       );
 
       // Journal entries removed
-      expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
-        where: {
-          tenantId,
-          sourceDocType: 'PurchaseReceipt',
-          sourceDocId: 'rec-hetero-1',
-        },
-      });
+      // Storno (TZ 10.2): the active entries of the document are looked up and
+      // reversed, never deleted.
+      expect(prisma.journalEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            tenantId,
+            sourceDocType: 'PurchaseReceipt',
+            sourceDocId: 'rec-hetero-1',
+          }),
+        }),
+      );
+      expect(prisma.journalEntry.deleteMany).not.toHaveBeenCalled();
     });
 
     it('should strictly reject creating purchase returns for SERVICE lines', async () => {

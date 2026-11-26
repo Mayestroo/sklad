@@ -218,6 +218,12 @@ enum DealStageSlug {
   LOST
 }
 
+/// A journal entry stays POSTED unless a storno entry reverses it (Buxgalteriya TZ 10.2).
+enum JournalEntryStatus {
+  POSTED
+  REVERSED
+}
+
 enum AccountType {
   ASSET
   LIABILITY
@@ -1585,8 +1591,12 @@ model Account {
   code      String      // NAS account code (e.g. "2910", "2920", "4010", "5110", "6410", "9010", "9110")
   name      Json        // Bilingual name { "uz": "...", "ru": "..." }
   type      AccountType
-  isSystem  Boolean     @default(false) @map("is_system")
-  isActive  Boolean     @default(true) @map("is_active")
+  /// Plain-language name shown in the simple mode { "uz": "...", "ru": "..." }; the official name stays in `name`.
+  alias       Json?
+  isSystem    Boolean     @default(false) @map("is_system")
+  /// Technical accounts (e.g. 00, the opening-balance helper) are hidden in the simple mode and kept out of totals.
+  isTechnical Boolean     @default(false) @map("is_technical")
+  isActive    Boolean     @default(true) @map("is_active")
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 
@@ -1607,13 +1617,21 @@ model JournalEntry {
   description   String
   sourceDocType String?  @map("source_doc_type") // "SalesInvoice", "Payment", "InventoryDocument", "StockTransfer", etc.
   sourceDocId   String?  @map("source_doc_id")
+  /// REVERSED once a storno entry cancels it; entries are never deleted (TZ 10.2).
+  status        JournalEntryStatus @default(POSTED)
+  /// Set on a storno entry: the entry it reverses (same source document, swapped sides).
+  reversedOfId  String?  @unique @map("reversed_of_id")
   createdAt     DateTime @default(now()) @map("created_at")
 
-  company Company       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  lines   JournalLine[]
+  company    Company       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  lines      JournalLine[]
+  reversedOf JournalEntry? @relation("JournalStorno", fields: [reversedOfId], references: [id], onDelete: NoAction)
+  reversal   JournalEntry? @relation("JournalStorno")
 
   @@unique([tenantId, entryNumber])
   @@index([tenantId])
+  @@index([tenantId, sourceDocType, sourceDocId])
+  @@index([tenantId, entryDate])
   @@map("journal_entries")
 }
 
@@ -1622,13 +1640,21 @@ model JournalLine {
   entryId        String       @map("entry_id")
   debitAccountId String       @map("debit_account_id")
   creditAccountId String      @map("credit_account_id")
+  /// UZS value of the line (the ledger currency, ADR 0006); every report sums this.
   amount         Decimal      @db.Decimal(15, 2)
+  /// Currency of the source document side (TZ 15). UZS for lines measured in UZS.
+  currency       String       @default("UZS")
+  /// Amount in `currency` (equals `amount` for UZS lines).
+  amountOrig     Decimal      @map("amount_orig") @db.Decimal(15, 2)
   description    String?
 
   entry        JournalEntry @relation(fields: [entryId], references: [id], onDelete: Cascade)
   debitAccount  Account      @relation("DebitAccount", fields: [debitAccountId], references: [id], onDelete: Cascade)
   creditAccount Account      @relation("CreditAccount", fields: [creditAccountId], references: [id], onDelete: Cascade)
 
+  @@index([entryId])
+  @@index([debitAccountId])
+  @@index([creditAccountId])
   @@map("journal_lines")
 }
 

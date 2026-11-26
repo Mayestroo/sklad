@@ -361,7 +361,7 @@ function seedUsdReceipt(db: FakeDb, rate = 12500) {
 async function makeService(db: FakeDb) {
   const journalService = {
     createJournalEntry: jest.fn().mockResolvedValue({ id: 'je-1' }),
-    deleteEntriesForSource: jest.fn().mockResolvedValue(undefined),
+    reverseEntriesForSource: jest.fn().mockResolvedValue(undefined),
   };
   const settlementService = {
     recordMovement: jest.fn().mockResolvedValue({ created: true }),

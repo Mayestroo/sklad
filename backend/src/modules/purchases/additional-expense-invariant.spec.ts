@@ -509,12 +509,17 @@ describe('Additional Expenses & Landed Cost Invariant Tests', () => {
         lineGrossProfit: 3000000,
       },
     });
-    expect(prisma.journalEntry.deleteMany).toHaveBeenCalledWith({
-      where: {
-        tenantId,
-        sourceDocType: 'AdditionalExpense',
-        sourceDocId: 'exp-inv-5',
-      },
-    });
+    // Storno (TZ 10.2): the active entries of the document are looked up and
+    // reversed, never deleted.
+    expect(prisma.journalEntry.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          tenantId,
+          sourceDocType: 'AdditionalExpense',
+          sourceDocId: 'exp-inv-5',
+        }),
+      }),
+    );
+    expect(prisma.journalEntry.deleteMany).not.toHaveBeenCalled();
   });
 });

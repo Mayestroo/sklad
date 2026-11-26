@@ -1114,7 +1114,7 @@ export class PurchasesService {
       await this.reverseThirdPartyExpensePayables(tx, tenantId, receipt);
 
       // 3. Remove journal entries
-      await this.journalService.deleteEntriesForSource(
+      await this.journalService.reverseEntriesForSource(
         tx,
         tenantId,
         'PurchaseReceipt',
@@ -2445,7 +2445,7 @@ export class PurchasesService {
         }
 
         // 5. Delete journal entries created for this return
-        await this.journalService.deleteEntriesForSource(
+        await this.journalService.reverseEntriesForSource(
           tx,
           tenantId,
           'PurchaseReturn',
