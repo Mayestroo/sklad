@@ -6,6 +6,7 @@ const apiFetch = vi.fn();
 vi.mock('@/lib/api', () => ({ apiFetch: (...args: unknown[]) => apiFetch(...args) }));
 const auth = { token: 'tok', company: { id: 'tenant-1' }, user: { id: 'u1' }, hasRole: () => false, hasPermission: () => true };
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth }));
+vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock('next-intl', () => ({
   useLocale: () => 'uz',
   useTranslations: () => (key: string) => key,

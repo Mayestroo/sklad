@@ -23,7 +23,9 @@ import { SkeletonRows } from '@/components/ui/Skeleton';
 import { FilterBar, useFilterState, type FilterDef } from '@/components/ui/filters';
 import { AccountingShell, useAccountingView } from '@/components/accounting/AccountingShell';
 import { ExportButtons, MovementList, describeForExport, officialLabel, useLedgerMoney } from '@/components/accounting/AccountingParts';
-import { localIsoDate } from '@/lib/date-range';
+import { formatRange, localIsoDate } from '@/lib/date-range';
+import { formatCurrency, formatDate } from '@/lib/utils';
+import type { ReportDoc } from '@/lib/accounting-export';
 import { JOURNAL_SOURCE_GROUP_KEYS, DEFAULT_CARD_ACCOUNTS, type Account, type AccountingSummary, type JournalEntryPage } from '@shared/types';
 
 const PAGE_SIZE = 50;
@@ -69,23 +71,55 @@ function Movements({ canCreate }: { canCreate: boolean }) {
   ];
   const filtered = Boolean(lf.values.source || lf.values.account || lf.search);
 
-  const exportRows = () =>
-    mode === 'accountant'
-      ? [
-          [t('journal.lines'), `${from} – ${to}`],
-          [t('movements.number'), t('movements.when'), t('manual.comment'), t('journal.debit'), t('journal.credit'), t('journal.amount'), t('journal.original')],
-          ...items.flatMap((e) =>
-            (e.lines ?? []).map((l) => [e.entryNumber, e.entryDate.slice(0, 10), e.description, officialLabel(l.debitAccount, locale), officialLabel(l.creditAccount, locale), Number(l.amount), l.currency !== 'UZS' ? `${l.amountOrig} ${l.currency}` : '']),
-          ),
-        ]
-      : [[t('tabs.simple_movements'), `${from} – ${to}`], [t('movements.when'), t('movements.whatChanged'), t('reports.amount')], ...items.map((e) => describeForExport(e, cards, t, locale))];
+  const exportDoc = (): Omit<ReportDoc, 'company' | 'footer'> => {
+    const meta = [t('export.period', { range: formatRange(from, to) }), t('export.entries', { count: items.length }), t('export.currency')];
+    if (mode === 'accountant') {
+      return {
+        title: t('tabs.accountant_movements'),
+        meta,
+        landscape: true,
+        columns: [
+          { label: t('movements.number'), width: 16 },
+          { label: t('movements.when'), width: 12 },
+          { label: t('manual.comment'), width: 40 },
+          { label: t('journal.debit'), width: 30 },
+          { label: t('journal.credit'), width: 30 },
+          { label: t('journal.amount'), numeric: true },
+          { label: t('journal.original'), width: 16 },
+        ],
+        rows: items.flatMap((e) =>
+          (e.lines ?? []).map((l, i) => ({
+            cells: [
+              i === 0 ? e.entryNumber : '',
+              i === 0 ? formatDate(e.entryDate, locale) : '',
+              i === 0 ? e.description + (e.status === 'REVERSED' ? ` (${t('movements.cancelled')})` : '') : '',
+              officialLabel(l.debitAccount, locale),
+              officialLabel(l.creditAccount, locale),
+              Number(l.amount),
+              l.currency && l.currency !== 'UZS' ? formatCurrency(Number(l.amountOrig), locale, l.currency) : '',
+            ],
+          })),
+        ),
+      };
+    }
+    return {
+      title: t('tabs.simple_movements'),
+      meta,
+      columns: [
+        { label: t('movements.when'), width: 12 },
+        { label: t('movements.whatChanged'), width: 70 },
+        { label: t('reports.amount'), numeric: true },
+      ],
+      rows: items.map((e) => ({ cells: describeForExport(e, cards, t, locale) })),
+    };
+  };
 
   return (
     <Card>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 'var(--space-3)', flexWrap: 'wrap', marginBottom: 'var(--space-4)' }}>
         <h2 style={{ fontSize: 'var(--text-base)', fontWeight: 'var(--font-semibold)' }}>{t(`tabs.${mode}_movements`)}</h2>
         <div style={{ display: 'flex', gap: 'var(--space-2)', flexWrap: 'wrap', alignItems: 'center' }}>
-          {items.length > 0 && <ExportButtons filename={`harakatlar_${from}_${to}`} rows={exportRows} />}
+          {items.length > 0 && <ExportButtons filename={`harakatlar_${from}_${to}`} build={exportDoc} />}
           {mode === 'accountant' && canCreate && (
             <Button size="sm" onClick={() => setManualOpen(true)}>
               <Plus size={14} aria-hidden /> {t('journal.newEntry')}

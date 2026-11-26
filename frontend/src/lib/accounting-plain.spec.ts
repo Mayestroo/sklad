@@ -1,6 +1,6 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
-import { accountingPeriodRange, compactAmount, dayGroup, describeEntry, entryEffects, isAccountingPeriod, toCsv } from './accounting-plain.ts';
+import { accountingPeriodRange, compactAmount, dayGroup, describeEntry, entryEffects, isAccountingPeriod } from './accounting-plain.ts';
 
 const CARDS = {
   money: ['5010', '5020', '5110', '5210'],
@@ -78,7 +78,4 @@ describe('accounting-plain', () => {
     assert.equal(dayGroup('2026-11-01', now), 'date');
   });
 
-  it('writes a spreadsheet Excel opens', () => {
-    assert.equal(toCsv([['Hisob', 'Summa'], ['Kassa; naqd', 1200.5]]), '﻿Hisob;Summa\r\n"Kassa; naqd";1200.5');
-  });
 });

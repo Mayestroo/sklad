@@ -13,6 +13,7 @@ const auth = {
   hasPermission: () => true,
 };
 vi.mock('@/context/AuthContext', () => ({ useAuth: () => auth }));
+vi.mock('@/context/ToastContext', () => ({ useToast: () => ({ success: vi.fn(), error: vi.fn() }) }));
 vi.mock('next-intl', () => ({
   useLocale: () => 'uz',
   useTranslations: () => (key: string) => key,

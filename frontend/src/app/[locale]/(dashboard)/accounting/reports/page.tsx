@@ -7,6 +7,8 @@ import { Link } from '@/i18n/navigation';
 import { useApiQuery } from '@/lib/query/useApiQuery';
 import { usePersistentState } from '@/lib/usePersistentState';
 import { formatDate } from '@/lib/utils';
+import { formatRange } from '@/lib/date-range';
+import type { ReportDoc, ReportRow } from '@/lib/accounting-export';
 import { Card } from '@/components/ui/Card';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { LoadError } from '@/components/ui/LoadError';
@@ -109,19 +111,38 @@ function Rows({ title, lines, total, totalLabel }: { title: string; lines: Repor
   );
 }
 
-function Header({ summary, exportName, rows }: { summary: ReactNode; exportName: string; rows: () => Array<Array<string | number>> }) {
+function Header({ summary, exportName, build }: { summary: ReactNode; exportName: string; build: () => Omit<ReportDoc, 'company' | 'footer'> }) {
   return (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
       <p className="acct-summary" role="status">{summary}</p>
-      <ExportButtons filename={exportName} rows={rows} />
+      <ExportButtons filename={exportName} build={build} />
     </div>
   );
 }
 
-const lineRows = (title: string, lines: ReportLine[], name: (l: ReportLine) => string) => [[title], ...lines.map((l) => [name(l), l.amount])];
+/** A titled block of a report export: the section line, its lines and its total. */
+const block = (title: string, lines: ReportLine[], name: (l: ReportLine) => string, total: number, totalLabel: string): ReportRow[] => [
+  { kind: 'section', cells: [title] },
+  ...lines.map((l) => ({ cells: [name(l), l.amount] })),
+  { kind: 'total', cells: [totalLabel, total] },
+];
+
+function useReportDoc() {
+  const t = useTranslations('acct');
+  return (title: string, meta: string[], rows: ReportRow[]): Omit<ReportDoc, 'company' | 'footer'> => ({
+    title,
+    meta: [...meta, t('export.currency')],
+    columns: [
+      { label: t('reports.name'), width: 55 },
+      { label: t('reports.amount'), numeric: true, width: 20 },
+    ],
+    rows,
+  });
+}
 
 function ProfitLoss({ report }: { report: ProfitLossReport }) {
   const t = useTranslations('acct');
+  const doc = useReportDoc();
   const money = useLedgerMoney();
   const name = useLineName();
   const { from, to } = useAccountingView();
@@ -132,7 +153,13 @@ function ProfitLoss({ report }: { report: ProfitLossReport }) {
       <Header
         summary={report.netProfit < 0 ? t('reports.pnlLoss', params) : t('reports.pnlProfit', params)}
         exportName={`foyda-zarar_${from}_${to}`}
-        rows={() => [[t('reports.profit-loss_official'), `${from} – ${to}`], ...lineRows(t('reports.revenue'), report.revenue, name), [t('reports.total'), report.totalRevenue], ...lineRows(t('reports.expenses'), report.expenses, name), [t('reports.total'), report.totalExpenses], [t('reports.netProfit'), report.netProfit]]}
+        build={() =>
+          doc(t('reports.profit-loss_official'), [t('export.period', { range: formatRange(from, to) })], [
+            ...block(t('reports.revenue'), report.revenue, name, report.totalRevenue, t('reports.total')),
+            ...block(t('reports.expenses'), report.expenses, name, report.totalExpenses, t('reports.total')),
+            { kind: 'grand', cells: [t('reports.netProfit'), report.netProfit] },
+          ])
+        }
       />
       <Rows title={t('reports.revenue')} lines={report.revenue} total={report.totalRevenue} />
       <Rows title={t('reports.expenses')} lines={report.expenses} total={report.totalExpenses} />
@@ -148,6 +175,7 @@ function ProfitLoss({ report }: { report: ProfitLossReport }) {
 
 function Balance({ report }: { report: BalanceReport }) {
   const t = useTranslations('acct');
+  const doc = useReportDoc();
   const locale = useLocale();
   const money = useLedgerMoney();
   const name = useLineName();
@@ -157,7 +185,14 @@ function Balance({ report }: { report: BalanceReport }) {
       <Header
         summary={t('reports.balanceSummary', { assets: money.compact(report.totalAssets), liabilities: money.compact(report.totalLiabilities), equity: money.compact(report.totalEquity) })}
         exportName={`balans_${report.periodEnd}`}
-        rows={() => [[t('reports.balance_official'), report.periodEnd], ...lineRows(t('reports.assets'), report.assets, name), [t('reports.total'), report.totalAssets], ...lineRows(t('reports.liabilities'), report.liabilities, name), [t('reports.total'), report.totalLiabilities], ...lineRows(t('reports.equity'), report.equity, name), [t('reports.total'), report.totalEquity]]}
+        build={() =>
+          doc(t('reports.balance_official'), [t('export.asOf', { date: formatDate(report.periodEnd, locale) })], [
+            ...block(t('reports.assets'), report.assets, name, report.totalAssets, t('reports.total')),
+            ...block(t('reports.liabilities'), report.liabilities, name, report.totalLiabilities, t('reports.total')),
+            ...block(t('reports.equity'), report.equity, name, report.totalEquity, t('reports.total')),
+            { kind: 'grand', cells: [t('reports.liabilitiesEquity'), report.totalLiabilities + report.totalEquity] },
+          ])
+        }
       />
       <p className="rd-sub" style={{ marginTop: 0 }}>{t('reports.asOf', { date: formatDate(report.periodEnd, locale) })}</p>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 320px), 1fr))', gap: 'var(--space-6)' }}>
@@ -182,6 +217,7 @@ function Balance({ report }: { report: BalanceReport }) {
 
 function CashFlow({ report }: { report: CashFlowReport }) {
   const t = useTranslations('acct');
+  const doc = useReportDoc();
   const money = useLedgerMoney();
   const name = useLineName();
   const { from, to } = useAccountingView();
@@ -190,7 +226,14 @@ function CashFlow({ report }: { report: CashFlowReport }) {
       <Header
         summary={t('reports.cashSummary', { inflow: money.compact(report.inflow), outflow: money.compact(report.outflow) })}
         exportName={`pul-harakati_${from}_${to}`}
-        rows={() => [[t('reports.cash-flow_official'), `${from} – ${to}`], [t('reports.opening'), report.opening], ...lineRows(t('reports.inflowBy'), report.inflowBy, name), [t('reports.inflow'), report.inflow], ...lineRows(t('reports.outflowBy'), report.outflowBy, name), [t('reports.outflow'), report.outflow], [t('reports.closing'), report.closing]]}
+        build={() =>
+          doc(t('reports.cash-flow_official'), [t('export.period', { range: formatRange(from, to) })], [
+            { kind: 'total', cells: [t('reports.opening'), report.opening] },
+            ...block(t('reports.inflowBy'), report.inflowBy, name, report.inflow, t('reports.inflow')),
+            ...block(t('reports.outflowBy'), report.outflowBy, name, report.outflow, t('reports.outflow')),
+            { kind: 'grand', cells: [t('reports.closing'), report.closing] },
+          ])
+        }
       />
       <div className="acct-rows">
         <div className="acct-rows-row"><span>{t('reports.opening')}</span><span className="num">{money.full(report.opening)}</span></div>
