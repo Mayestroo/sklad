@@ -581,7 +581,11 @@ export default function OpeningBalancesPage() {
   };
 
   /** A second set of balances at another date (rare): an empty, unsaved draft. */
-  const startNewDraft = () => {
+  const startNewDraft = async () => {
+    if (versionRef.current !== savedVersionRef.current && !(await persist())) {
+      toast.error(isRu ? 'Сначала исправьте текущий черновик' : 'Avval joriy qoralamani to‘g‘rilang');
+      return;
+    }
     applyDocument(null);
   };
 
@@ -788,12 +792,17 @@ export default function OpeningBalancesPage() {
   }, [effectiveLines]);
 
   const hasUsdLines = lines.some((l) => l.currency === 'USD');
-  const documentOptions: SelectOption[] = documents.map((d) => ({
-    value: d.id,
-    label: `${d.openingDate ? d.openingDate.slice(0, 10) : ''} — ${
-      d.status === 'POSTED' ? (isRu ? 'проведён' : 'tasdiqlangan') : isRu ? 'черновик' : 'qoralama'
-    }`,
-  }));
+  /** Every set of opening balances (by date), plus starting one at another date. */
+  const NEW_DOCUMENT = '__new__';
+  const documentOptions: SelectOption[] = [
+    ...documents.map((d) => ({
+      value: d.id,
+      label: d.openingDate ? d.openingDate.slice(0, 10).split('-').reverse().join('.') : d.docNumber,
+      description:
+        d.status === 'POSTED' ? (isRu ? 'Проведено' : 'Tasdiqlangan') : d.status === 'CANCELLED' ? (isRu ? 'Отменено' : 'Bekor qilingan') : isRu ? 'Черновик' : 'Qoralama',
+    })),
+    { value: NEW_DOCUMENT, label: isRu ? '+ Остатки на другую дату' : '+ Boshqa sanaga qoldiq' },
+  ];
 
   const tableProps = { lines, isReadOnly, locale, isRu, onUpdate: updateLineField, onRemove: removeLine };
   const amountOf = (line: OpeningBalanceDraftLine) => Number(line.amount || 0);
@@ -920,25 +929,6 @@ export default function OpeningBalancesPage() {
     }
   };
 
-  const docControls = (documents.length > 1 || isPosted) && (
-    <div className="ob-docs">
-      {documents.length > 1 && (
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-          <span>{isRu ? 'Другие остатки:' : 'Boshqa qoldiqlar:'}</span>
-          <div style={{ width: 240 }}>
-            <Select options={documentOptions} value={currentDoc?.id ?? ''} onChange={(id) => void switchDocument(id)} placeholder={isRu ? 'Новый (не сохранён)' : 'Yangi (saqlanmagan)'} size="sm" />
-          </div>
-        </div>
-      )}
-      {isPosted && (
-        <Button variant="ghost" size="sm" onClick={startNewDraft}>
-          <Plus size={14} aria-hidden />
-          <span>{isRu ? 'Остатки на другую дату' : 'Boshqa sanaga qoldiq kiritish'}</span>
-        </Button>
-      )}
-    </div>
-  );
-
   // ─── Render ────────────────────────────────────────────────────
 
   if (!loaded) {
@@ -967,6 +957,17 @@ export default function OpeningBalancesPage() {
           </p>
         </div>
         <div className="ob-head-actions">
+          {documents.length > 0 && (
+            <div style={{ width: 220 }} data-testid="opening-balance-document-select">
+              <Select
+                options={documentOptions}
+                value={currentDoc?.id ?? ''}
+                onChange={(id) => void (id === NEW_DOCUMENT ? startNewDraft() : switchDocument(id))}
+                placeholder={isRu ? 'Новая дата (не сохранено)' : 'Yangi sana (saqlanmagan)'}
+                size="sm"
+              />
+            </div>
+          )}
           {isPosted ? (
             <Badge variant="success">{isRu ? 'Проведено' : 'Tasdiqlangan'}</Badge>
           ) : (
@@ -1057,7 +1058,6 @@ export default function OpeningBalancesPage() {
                     : 'Qatorlarda turli USD kurslari bor edi. Endi barcha dollardagi qatorlarga bitta kurs qo‘llanadi.'}
                 </p>
               )}
-              {docControls}
             </div>
           )}
 
@@ -1166,7 +1166,6 @@ export default function OpeningBalancesPage() {
                   {isRu ? 'Строки без валюты или без курса доллара пока не вошли в итог.' : 'Valyutasiz yoki dollar kursisiz qatorlar hali jamiga kirmagan.'}
                 </p>
               )}
-              {isPosted && docControls}
             </div>
           )}
         </div>
