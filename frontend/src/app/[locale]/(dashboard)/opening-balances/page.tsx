@@ -2,8 +2,8 @@
 
 import { MoneyInput } from '@/components/ui/MoneyInput';
 import { QuantityInput } from '@/components/ui/QuantityInput';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { useLocale, useTranslations } from 'next-intl';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { useLocale } from 'next-intl';
 import { Link } from '@/i18n/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { useConfirm } from '@/context/ConfirmContext';
@@ -19,17 +19,17 @@ import {
   counterpartiesForKind,
   documentUsdRate,
   isCounterpartyLineKind,
-  linesMissingCurrency,
   needsUsdRate,
   newOpeningBalanceLine,
+  openingBalanceSaveBlocker,
   suggestedStraightLineDepreciation,
   withDocumentRate,
   withProductCost,
   withRegisterAsset,
   type CounterpartyLineKind,
+  type OpeningBalanceSaveBlocker,
 } from '@/lib/opening-balance-lines';
 import { computeOpeningBalanceTotals } from '@shared/types/opening-balance-posting';
-import { StatCard, StatCardGrid } from '@/components/ui/stats/StatCard';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
@@ -51,19 +51,17 @@ import {
   Upload,
   Download,
   Trash2,
-  Wallet,
-  Package,
-  Users,
-  Layers,
-  Building,
   ArrowRight,
   Check,
-  Calculator, FilePlus2, LockOpen, Building2 } from 'lucide-react';
+  Loader2,
+  Calculator,
+  LockOpen,
+  Building2,
+} from 'lucide-react';
 import type {
   OpeningBalanceDocument,
   OpeningBalanceLine,
   OpeningBalanceCategory,
-  OpeningBalanceStatus,
   ImportErrorItem,
   ImportValidationResult,
 } from '@shared/types/opening-balances';
@@ -75,21 +73,31 @@ import type { Warehouse } from '@shared/types/tenant';
 import type { FixedAsset } from '@shared/types/fixed-assets';
 
 /**
- * Opening balances, simplified:
- *  - five tabs: money, goods, debts & advances, fixed assets, capital & other;
- *  - one USD rate for the whole document (the opening date's rate);
- *  - capital balances itself: what is not entered as ustav kapitali is posted
- *    as retained earnings (8710), so there is no "balance difference" to fix;
- *  - posting saves first, then opens every line in its own module (kassa,
- *    warehouse FIFO batch, counterparty settlement, fixed-asset register,
- *    journal), and the page links to each of them.
+ * Opening balances as one page an operator fills top to bottom:
+ *  1. the date the company starts keeping its books here;
+ *  2. five sections, each a plain question (money, goods, debts, fixed
+ *     assets, capital) — empty sections count as zero;
+ *  3. "check and confirm": has − owes = own capital, and one post button.
+ *
+ * There is no "document" step: the draft is created by the first change and
+ * every change is saved on its own (autosave). The page only waits when the
+ * server would refuse the save — a line without a currency, or USD lines
+ * without the document's USD rate — and says which.
+ *
+ * Capital balances itself: what is not entered as ustav kapitali is posted
+ * as retained earnings (8710). Posting opens every line in its own module
+ * (kassa, warehouse FIFO batch, counterparty settlement, fixed-asset
+ * register, journal).
  */
 
-type TabKey = 'cash' | 'inventory' | 'debts' | 'fixed-assets' | 'other';
+type SectionKey = 'cash' | 'inventory' | 'debts' | 'fixed-assets' | 'other';
 type OpeningBalanceDraftLine = Omit<Partial<OpeningBalanceLine>, 'exchangeRate'> & { exchangeRate?: number | string };
 type LineValue = OpeningBalanceDraftLine[keyof OpeningBalanceDraftLine];
 type IndexedLine = { line: OpeningBalanceDraftLine; index: number };
 type Locale = 'uz' | 'ru';
+type SaveState = 'idle' | 'saving' | 'saved' | 'blocked' | 'error';
+
+const AUTOSAVE_DELAY_MS = 1200;
 
 interface SubledgerTableProps {
   lines: OpeningBalanceDraftLine[];
@@ -108,6 +116,22 @@ function linesWhere(lines: OpeningBalanceDraftLine[], keep: (line: OpeningBalanc
 const CASH_CATEGORIES = new Set<string>(['CASH', 'BANK']);
 const OTHER_CATEGORIES = new Set<string>(['EQUITY', 'OTHER_ASSET', 'OTHER_LIABILITY']);
 
+function sectionOf(category: string | null | undefined): SectionKey {
+  if (CASH_CATEGORIES.has(String(category))) return 'cash';
+  if (category === 'INVENTORY') return 'inventory';
+  if (isCounterpartyLineKind(category)) return 'debts';
+  if (category === 'FIXED_ASSET') return 'fixed-assets';
+  return 'other';
+}
+
+const SECTION_NAMES: Record<SectionKey, Record<Locale, string>> = {
+  cash: { uz: 'Pul', ru: 'Деньги' },
+  inventory: { uz: 'Tovarlar', ru: 'Товары' },
+  debts: { uz: 'Qarzlar', ru: 'Долги' },
+  'fixed-assets': { uz: 'Uskuna va binolar', ru: 'Оборудование и здания' },
+  other: { uz: 'Ustav kapitali', ru: 'Уставный капитал' },
+};
+
 const firstDayOfMonth = () => `${new Date().toISOString().slice(0, 8)}01`;
 
 const localized = (name: unknown, locale: Locale, fallback: string): string => {
@@ -117,16 +141,27 @@ const localized = (name: unknown, locale: Locale, fallback: string): string => {
   return n[locale] || n.uz || n.ru || fallback;
 };
 
+/** "1 200 000 UZS · 300 USD": one sum per currency, never added together (ADR 0023). */
+function sumsByCurrency(items: IndexedLine[], valueOf: (line: OpeningBalanceDraftLine) => number, locale: Locale): string | null {
+  const sums = new Map<string, number>();
+  for (const { line } of items) {
+    if (!line.currency) continue;
+    sums.set(line.currency, (sums.get(line.currency) ?? 0) + valueOf(line));
+  }
+  const parts = [...sums.entries()].filter(([, sum]) => sum !== 0).map(([currency, sum]) => formatCurrency(sum, locale, currency));
+  return parts.length > 0 ? parts.join(' · ') : null;
+}
+
 // ─── Shared table styles ────────────────────────────────────────────────────
 
 const th = (extra?: React.CSSProperties): React.CSSProperties => ({
-  padding: '12px 16px',
+  padding: '10px 12px',
   fontSize: 'var(--text-xs)',
   fontWeight: 500,
   color: 'var(--color-text-secondary)',
   ...extra,
 });
-const td: React.CSSProperties = { padding: '10px 16px' };
+const td: React.CSSProperties = { padding: '8px 12px' };
 const field = (width: number | string, extra?: React.CSSProperties): React.CSSProperties => ({
   padding: '8px 12px',
   borderRadius: 'var(--radius-md)',
@@ -138,31 +173,23 @@ const field = (width: number | string, extra?: React.CSSProperties): React.CSSPr
   ...extra,
 });
 const tableStyle: React.CSSProperties = { width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: 'var(--text-sm)' };
-const theadStyle: React.CSSProperties = { backgroundColor: 'var(--color-bg-subtle)', borderBottom: '1px solid var(--color-border-light)' };
+const theadStyle: React.CSSProperties = { borderBottom: '1px solid var(--color-border-light)' };
 const rowStyle: React.CSSProperties = { borderBottom: '1px solid var(--color-border-light)' };
-
-function EmptyRow({ colSpan, text }: { colSpan: number; text: string }) {
-  return (
-    <tr>
-      <td colSpan={colSpan} style={{ padding: '32px 16px', textAlign: 'center', color: 'var(--color-text-tertiary)' }}>
-        {text}
-      </td>
-    </tr>
-  );
-}
 
 function RemoveCell({ isReadOnly, isRu, onClick }: { isReadOnly: boolean; isRu: boolean; onClick: () => void }) {
   if (isReadOnly) return null;
   return (
-    <td style={{ ...td, textAlign: 'center' }}>
-      <button
+    <td style={{ ...td, textAlign: 'center', width: 48 }}>
+      <Button
         type="button"
+        variant="danger-ghost"
+        size="sm"
         onClick={onClick}
-        style={{ background: 'none', border: 'none', color: 'var(--color-error-700)', cursor: 'pointer', padding: '4px' }}
-        title={isRu ? 'Удалить' : 'O‘chirish'}
+        aria-label={isRu ? 'Удалить строку' : 'Qatorni o‘chirish'}
+        title={isRu ? 'Удалить строку' : 'Qatorni o‘chirish'}
       >
-        <Trash2 size={16} />
-      </button>
+        <Trash2 size={16} aria-hidden />
+      </Button>
     </td>
   );
 }
@@ -182,6 +209,7 @@ function NotesInput({ line, index, isReadOnly, isRu, onUpdate, placeholder }: {
       disabled={isReadOnly}
       onChange={(e) => onUpdate(index, 'notes', e.target.value)}
       placeholder={placeholder ?? (isRu ? 'Примечание...' : 'Izoh...')}
+      aria-label={isRu ? 'Описание' : 'Tavsif'}
       style={field('100%')}
     />
   );
@@ -190,19 +218,16 @@ function NotesInput({ line, index, isReadOnly, isRu, onUpdate, placeholder }: {
 export default function OpeningBalancesPage() {
   const locale = useLocale() as Locale;
   const isRu = locale === 'ru';
-  const tob = useTranslations('rd.ob');
   const { token, company } = useAuth();
   const confirm = useConfirm();
   const companyId = company?.id;
   const docCurrency = 'UZS';
 
-  // Documents
+  // Documents (usually one; the page never asks the user to "create" one)
   const [documents, setDocuments] = useState<OpeningBalanceDocument[]>([]);
-  const [documentsLoaded, setDocumentsLoaded] = useState(false);
-  const [selectedDocId, setSelectedDocId] = useState<string>('');
+  const [loaded, setLoaded] = useState(false);
   const [currentDoc, setCurrentDoc] = useState<OpeningBalanceDocument | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabKey>('cash');
 
   // Lookups
   const [accounts, setAccounts] = useState<CashAccount[]>([]);
@@ -219,7 +244,7 @@ export default function OpeningBalancesPage() {
     | null
   >(null);
 
-  // Working document
+  // Working draft
   const [lines, setLines] = useState<OpeningBalanceDraftLine[]>([]);
   const [openingDate, setOpeningDate] = useState<string>(firstDayOfMonth());
   const [notes, setNotes] = useState<string>('');
@@ -227,11 +252,16 @@ export default function OpeningBalancesPage() {
   const [usdRate, setUsdRate] = useState<string>('');
   const [ratesWereMixed, setRatesWereMixed] = useState(false);
 
-  // Modals
-  const [showNewDocModal, setShowNewDocModal] = useState(false);
-  const [newDocDate, setNewDocDate] = useState(firstDayOfMonth());
-  const [newDocNotes, setNewDocNotes] = useState('');
+  // Autosave: every edit bumps the version; a save records the version it sent.
+  const [editVersion, setEditVersion] = useState(0);
+  const [saveState, setSaveState] = useState<SaveState>('idle');
+  const [saveError, setSaveError] = useState('');
+  const versionRef = useRef(0);
+  const savedVersionRef = useRef(0);
+  const savingRef = useRef<Promise<boolean> | null>(null);
+  const draftRef = useRef({ lines, openingDate, notes, usdRate, docId: '' });
 
+  // Modals
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importErrors, setImportErrors] = useState<ImportErrorItem[]>([]);
@@ -245,6 +275,13 @@ export default function OpeningBalancesPage() {
     () => ({ token: token || undefined, tenantId: companyId, locale }),
     [token, companyId, locale],
   );
+
+  useEffect(() => {
+    draftRef.current = { lines, openingDate, notes, usdRate, docId: draftRef.current.docId };
+  }, [lines, openingDate, notes, usdRate]);
+
+  const isReadOnly = currentDoc?.status === 'POSTED' || currentDoc?.status === 'CANCELLED';
+  const isPosted = currentDoc?.status === 'POSTED';
 
   // ─── Lookups ───────────────────────────────────────────────────
 
@@ -285,117 +322,169 @@ export default function OpeningBalancesPage() {
 
   // ─── Documents ─────────────────────────────────────────────────
 
-  const loadDocuments = useCallback(async () => {
-    if (!token || !companyId) return;
-    try {
-      const docs = await apiFetch<OpeningBalanceDocument[]>('/opening-balances', requestOptions);
-      setDocuments(docs || []);
-      if (docs && docs.length > 0) {
-        setSelectedDocId((current) => (current && docs.some((d) => d.id === current) ? current : docs[0].id));
-      } else {
-        setSelectedDocId('');
-        setCurrentDoc(null);
-        setLines([]);
-      }
-    } catch (e) {
-      toast.error(errorMessage(e) || (isRu ? 'Ошибка при загрузке документов' : 'Hujjatlarni yuklashda xatolik'));
-    } finally {
-      setDocumentsLoaded(true);
-    }
-  }, [token, companyId, requestOptions, isRu]);
+  /** Puts a loaded document on the page as the saved state. */
+  const applyDocument = useCallback((doc: OpeningBalanceDocument | null) => {
+    const docLines = doc?.lines || [];
+    const { rate, mixed } = documentUsdRate(docLines);
+    setCurrentDoc(doc);
+    setLines(docLines);
+    setUsdRate(rate);
+    setRatesWereMixed(mixed);
+    setOpeningDate(doc?.openingDate ? doc.openingDate.slice(0, 10) : firstDayOfMonth());
+    setNotes(doc?.notes || '');
+    draftRef.current.docId = doc?.id ?? '';
+    savedVersionRef.current = versionRef.current;
+    setSaveError('');
+    setSaveState(doc && doc.status === 'DRAFT' ? 'saved' : 'idle');
+  }, []);
 
-  useEffect(() => {
-    loadDocuments();
-  }, [loadDocuments]);
+  const fetchDocument = useCallback(
+    (id: string) => apiFetch<OpeningBalanceDocument>(`/opening-balances/${id}`, requestOptions),
+    [requestOptions],
+  );
 
-  const loadDocumentDetails = useCallback(
-    async (id: string) => {
-      if (!token || !companyId || !id) return;
-      try {
-        const doc = await apiFetch<OpeningBalanceDocument>(`/opening-balances/${id}`, requestOptions);
-        const docLines = doc.lines || [];
-        const { rate, mixed } = documentUsdRate(docLines);
-        setCurrentDoc(doc);
-        setLines(docLines);
-        setUsdRate(rate);
-        setRatesWereMixed(mixed);
-        setOpeningDate(doc.openingDate ? doc.openingDate.slice(0, 10) : firstDayOfMonth());
-        setNotes(doc.notes || '');
-      } catch (e) {
-        toast.error(errorMessage(e) || (isRu ? 'Ошибка загрузки документа' : 'Hujjat tafsilotlarini yuklashda xatolik'));
-      }
+  /** The draft to keep working on, else the latest document. */
+  const pickDocument = (docs: OpeningBalanceDocument[]) => docs.find((d) => d.status === 'DRAFT') ?? docs[0];
+
+  const reload = useCallback(
+    async (preferId?: string) => {
+      const docs = (await apiFetch<OpeningBalanceDocument[]>('/opening-balances', requestOptions)) || [];
+      setDocuments(docs);
+      const target = docs.find((d) => d.id === preferId) ?? pickDocument(docs);
+      applyDocument(target ? await fetchDocument(target.id) : null);
     },
-    [token, companyId, requestOptions, isRu],
+    [requestOptions, applyDocument, fetchDocument],
   );
 
   useEffect(() => {
-    if (selectedDocId) loadDocumentDetails(selectedDocId);
-  }, [selectedDocId, loadDocumentDetails]);
+    if (!token || !companyId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const docs = (await apiFetch<OpeningBalanceDocument[]>('/opening-balances', requestOptions)) || [];
+        if (cancelled) return;
+        setDocuments(docs);
+        const target = pickDocument(docs);
+        const doc = target ? await fetchDocument(target.id) : null;
+        if (!cancelled) applyDocument(doc);
+      } catch (e) {
+        toast.error(errorMessage(e) || (isRu ? 'Ошибка при загрузке остатков' : 'Qoldiqlarni yuklashda xatolik'));
+      } finally {
+        if (!cancelled) setLoaded(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, companyId, requestOptions, isRu, applyDocument, fetchDocument]);
 
-  // ─── Totals (same rules the server posts with) ─────────────────
+  // ─── Autosave ──────────────────────────────────────────────────
 
   const effectiveLines = useMemo(() => withDocumentRate(lines, usdRate), [lines, usdRate]);
   const totals = useMemo(() => computeOpeningBalanceTotals(effectiveLines), [effectiveLines]);
+  const blocker = useMemo(() => openingBalanceSaveBlocker(lines, usdRate), [lines, usdRate]);
 
-  const isReadOnly = currentDoc?.status === 'POSTED' || currentDoc?.status === 'CANCELLED';
-  const isPosted = currentDoc?.status === 'POSTED';
-  const importSummary = importPreview ? summarizeImportPreview(importPreview) : null;
-  const hasUsdLines = lines.some((l) => l.currency === 'USD');
+  const markEdited = () => {
+    versionRef.current += 1;
+    setEditVersion(versionRef.current);
+  };
+
+  /**
+   * Saves the draft if it changed (creating it on the first save) and
+   * resolves true when the server has the current version. One save at a
+   * time; an edit made during a save is picked up by the next one.
+   */
+  const persist = useCallback(async (): Promise<boolean> => {
+    if (savingRef.current) await savingRef.current;
+    const draft = draftRef.current;
+    if (draft.docId && versionRef.current === savedVersionRef.current) return true;
+    if (openingBalanceSaveBlocker(draft.lines, draft.usdRate)) {
+      setSaveState('blocked');
+      return false;
+    }
+    const version = versionRef.current;
+    const effectiveLines = withDocumentRate(draft.lines, draft.usdRate);
+    const body = JSON.stringify({ openingDate: draft.openingDate, notes: draft.notes || undefined, lines: effectiveLines });
+    const run = (async () => {
+      setSaveState('saving');
+      try {
+        if (draft.docId) {
+          await apiFetch(`/opening-balances/${draft.docId}/lines`, { ...requestOptions, method: 'PUT', body });
+        } else {
+          const created = await apiFetch<OpeningBalanceDocument>('/opening-balances', { ...requestOptions, method: 'POST', body });
+          draftRef.current.docId = created.id;
+          setCurrentDoc(created);
+          setDocuments((prev) => [created, ...prev.filter((d) => d.id !== created.id)]);
+        }
+        savedVersionRef.current = Math.max(savedVersionRef.current, version);
+        setSaveError('');
+        setSaveState(versionRef.current === version ? 'saved' : 'saving');
+        return true;
+      } catch (e) {
+        setSaveError(errorMessage(e) || (isRu ? 'Ошибка сохранения' : 'Saqlashda xatolik'));
+        setSaveState('error');
+        return false;
+      }
+    })();
+    savingRef.current = run;
+    try {
+      return await run;
+    } finally {
+      savingRef.current = null;
+    }
+  }, [requestOptions, isRu]);
+
+  useEffect(() => {
+    if (isReadOnly || editVersion === savedVersionRef.current) return;
+    const timer = setTimeout(() => void persist(), AUTOSAVE_DELAY_MS);
+    return () => clearTimeout(timer);
+  }, [editVersion, isReadOnly, persist]);
+
+  // Leaving with unsaved edits: the browser asks; in-app navigation saves now.
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (versionRef.current !== savedVersionRef.current) event.preventDefault();
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => {
+      window.removeEventListener('beforeunload', onBeforeUnload);
+      if (versionRef.current !== savedVersionRef.current) void persist();
+    };
+  }, [persist]);
+
+  const blockerText = (b: OpeningBalanceSaveBlocker): string => {
+    if (!b) return '';
+    if (b.kind === 'usdRate') return isRu ? 'укажите курс USD вверху страницы' : 'sahifa tepasida USD kursini kiriting';
+    // Cash lines take their currency from the kassa: ask for the kassa there,
+    // and for the currency everywhere else.
+    const keys = [...new Set(b.categories.map((c) => sectionOf(c)))];
+    return keys
+      .map((key) => {
+        const what = key === 'cash' ? (isRu ? 'кассу' : 'kassani') : isRu ? 'валюту' : 'valyutani';
+        const name = SECTION_NAMES[key][locale];
+        return isRu ? `выберите ${what} в разделе «${name}»` : `«${name}» bo‘limida ${what} tanlang`;
+      })
+      .join('; ');
+  };
 
   // ─── Actions ───────────────────────────────────────────────────
 
-  /** Client checks that need the user, not the server. */
-  const readyToSend = (): boolean => {
-    const missingCurrencyRows = linesMissingCurrency(lines);
-    if (missingCurrencyRows.length > 0) {
-      toast.error(
-        isRu
-          ? `Выберите валюту в каждой строке (строки: ${missingCurrencyRows.join(', ')})`
-          : `Har bir qatorda valyutani tanlang (qatorlar: ${missingCurrencyRows.join(', ')})`,
-      );
-      return false;
-    }
-    if (needsUsdRate(lines, usdRate)) {
-      toast.error(isRu ? 'Укажите курс USD на дату остатков' : 'Qoldiq sanasidagi USD kursini kiriting');
-      return false;
-    }
-    return true;
-  };
-
-  const saveLines = async () => {
-    await apiFetch(`/opening-balances/${selectedDocId}/lines`, {
-      ...requestOptions,
-      method: 'PUT',
-      body: JSON.stringify({ openingDate, notes, lines: effectiveLines }),
-    });
-  };
-
-  const handleSaveLines = async () => {
-    if (!token || !companyId || !selectedDocId || !readyToSend()) return;
-    setActionLoading(true);
-    try {
-      await saveLines();
-      toast.success(isRu ? 'Изменения сохранены' : 'Boshlang‘ich qoldiqlar saqlandi');
-      loadDocumentDetails(selectedDocId);
-    } catch (e) {
-      toast.error(errorMessage(e) || (isRu ? 'Ошибка при сохранении' : 'Saqlashda xatolik yuz berdi'));
-    } finally {
-      setActionLoading(false);
-    }
-  };
-
-  /** Saves the current lines, then posts them (no separate save step). */
+  /** Saves what is on the page, then posts it. */
   const handlePost = async () => {
-    if (!token || !companyId || !selectedDocId || !readyToSend()) return;
+    if (!token || !companyId) return;
     if (lines.length === 0) {
-      toast.error(isRu ? 'Добавьте хотя бы одну строку' : 'Kamida bitta qator qo‘shing');
+      toast.error(isRu ? 'Сначала заполните хотя бы один раздел' : 'Avval kamida bitta bo‘limni to‘ldiring');
+      return;
+    }
+    if (blocker) {
+      toast.error(isRu ? `Нельзя провести: ${blockerText(blocker)}` : `Tasdiqlab bo‘lmaydi: ${blockerText(blocker)}`);
       return;
     }
     const ok = await confirm({
       title: isRu ? 'Провести начальные остатки?' : 'Boshlang‘ich qoldiqlarni tasdiqlaysizmi?',
       description: isRu
-        ? 'Деньги появятся в кассах, товары — на складе, долги — у клиентов и поставщиков, бухгалтерия получит проводку. После этого документ станет только для просмотра; ошибку можно исправить кнопкой «Исправить».'
-        : 'Pul kassalarda, tovar omborda, qarzlar mijoz va yetkazib beruvchilarda paydo bo‘ladi, buxgalteriyaga provodka yoziladi. Shundan keyin hujjat faqat ko‘rish uchun bo‘ladi; xatoni «Tuzatish» tugmasi bilan to‘g‘rilash mumkin.',
+        ? 'Деньги появятся в кассах, товары — на складе, долги — у клиентов и поставщиков, бухгалтерия получит проводку. После этого страница станет только для просмотра; ошибку можно исправить кнопкой «Исправить».'
+        : 'Pul kassalarda, tovar omborda, qarzlar mijoz va yetkazib beruvchilarda paydo bo‘ladi, buxgalteriyaga provodka yoziladi. Shundan keyin sahifa faqat ko‘rish uchun bo‘ladi; xatoni «Tuzatish» tugmasi bilan to‘g‘rilash mumkin.',
       variant: 'info',
       confirmText: isRu ? 'Провести' : 'Tasdiqlash',
       cancelText: isRu ? 'Отмена' : 'Bekor qilish',
@@ -404,60 +493,63 @@ export default function OpeningBalancesPage() {
 
     setActionLoading(true);
     try {
-      await saveLines();
-      await apiFetch(`/opening-balances/${selectedDocId}/post`, { ...requestOptions, method: 'POST' });
+      if (!(await persist())) {
+        toast.error(isRu ? 'Не удалось сохранить, проведение отменено' : 'Saqlab bo‘lmadi, tasdiqlash to‘xtatildi');
+        return;
+      }
+      const id = draftRef.current.docId;
+      await apiFetch(`/opening-balances/${id}/post`, { ...requestOptions, method: 'POST' });
       toast.success(
         isRu
           ? 'Остатки проведены: кассы, склады, расчёты и журнал обновлены.'
           : 'Boshlang‘ich qoldiqlar tasdiqlandi: kassa, ombor, hisob-kitoblar va jurnal yangilandi.',
       );
-      loadDocuments();
-      loadDocumentDetails(selectedDocId);
+      await reload(id);
     } catch (e) {
       toast.error(errorMessage(e) || (isRu ? 'Ошибка проведения' : 'Tasdiqlashda xatolik'));
-      loadDocumentDetails(selectedDocId);
     } finally {
       setActionLoading(false);
     }
   };
 
   const handleUnpost = async () => {
-    if (!token || !companyId || !selectedDocId) return;
+    const id = currentDoc?.id;
+    if (!token || !companyId || !id) return;
     setActionLoading(true);
     try {
-      await apiFetch(`/opening-balances/${selectedDocId}/unpost`, {
+      await apiFetch(`/opening-balances/${id}/unpost`, {
         ...requestOptions,
         method: 'POST',
         body: JSON.stringify({ reason: unpostReason || undefined }),
       });
       setShowUnpostModal(false);
       setUnpostReason('');
-      toast.success(isRu ? 'Документ переоткрыт (черновик).' : 'Hujjat qayta ochildi (qoralama).');
-      loadDocuments();
-      loadDocumentDetails(selectedDocId);
+      toast.success(isRu ? 'Можно исправлять. После правок проведите снова.' : 'Endi tuzatish mumkin. Tuzatgach, qayta tasdiqlang.');
+      await reload(id);
     } catch (e) {
-      toast.error(errorMessage(e) || (isRu ? 'Ошибка переоткрытия' : 'Hujjatni qayta ochishda xatolik'));
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка переоткрытия' : 'Qayta ochishda xatolik'));
     } finally {
       setActionLoading(false);
     }
   };
 
-  const handleDeleteDocument = async () => {
-    if (!token || !companyId || !selectedDocId) return;
+  /** Clears the draft: the saved one is deleted, an unsaved one is just emptied. */
+  const handleClearDraft = async () => {
     const ok = await confirm({
-      title: isRu ? 'Удалить черновик?' : 'Qoralamani o‘chirasizmi?',
-      description: isRu ? 'Все строки документа будут удалены.' : 'Hujjatning barcha qatorlari o‘chiriladi.',
+      title: isRu ? 'Очистить всё и начать заново?' : 'Hammasini tozalab, qaytadan boshlaysizmi?',
+      description: isRu ? 'Все введённые строки будут удалены.' : 'Kiritilgan barcha qatorlar o‘chiriladi.',
       variant: 'danger',
-      confirmText: isRu ? 'Удалить' : 'O‘chirish',
+      confirmText: isRu ? 'Очистить' : 'Tozalash',
       cancelText: isRu ? 'Отмена' : 'Bekor qilish',
     });
     if (!ok) return;
     setActionLoading(true);
     try {
-      await apiFetch(`/opening-balances/${selectedDocId}`, { ...requestOptions, method: 'DELETE' });
-      toast.success(isRu ? 'Документ удалён' : 'Hujjat o‘chirildi');
-      setSelectedDocId('');
-      loadDocuments();
+      if (savingRef.current) await savingRef.current;
+      const id = draftRef.current.docId;
+      if (id) await apiFetch(`/opening-balances/${id}`, { ...requestOptions, method: 'DELETE' });
+      toast.success(isRu ? 'Очищено' : 'Tozalandi');
+      await reload();
     } catch (e) {
       toast.error(errorMessage(e) || (isRu ? 'Ошибка удаления' : 'O‘chirishda xatolik'));
     } finally {
@@ -465,24 +557,21 @@ export default function OpeningBalancesPage() {
     }
   };
 
-  const handleCreateDocument = async () => {
-    if (!token || !companyId) return;
-    setActionLoading(true);
+  /** A second set of balances at another date (rare): an empty, unsaved draft. */
+  const startNewDraft = () => {
+    applyDocument(null);
+  };
+
+  const switchDocument = async (id: string) => {
+    if (id === currentDoc?.id) return;
+    if (versionRef.current !== savedVersionRef.current && !(await persist())) {
+      toast.error(isRu ? 'Сначала исправьте текущий черновик' : 'Avval joriy qoralamani to‘g‘rilang');
+      return;
+    }
     try {
-      const created = await apiFetch<OpeningBalanceDocument>('/opening-balances', {
-        ...requestOptions,
-        method: 'POST',
-        body: JSON.stringify({ openingDate: newDocDate, notes: newDocNotes.trim() || undefined, lines: [] }),
-      });
-      setShowNewDocModal(false);
-      setNewDocNotes('');
-      toast.success(isRu ? 'Документ создан' : 'Hujjat yaratildi');
-      setSelectedDocId(created.id);
-      await loadDocuments();
+      applyDocument(await fetchDocument(id));
     } catch (e) {
-      toast.error(errorMessage(e) || (isRu ? 'Ошибка создания' : 'Yaratishda xatolik'));
-    } finally {
-      setActionLoading(false);
+      toast.error(errorMessage(e) || (isRu ? 'Ошибка загрузки' : 'Yuklashda xatolik'));
     }
   };
 
@@ -522,14 +611,25 @@ export default function OpeningBalancesPage() {
     return formData;
   };
 
+  /** The import goes into the draft, so the draft must exist on the server first. */
+  const ensureDraftId = async (): Promise<string | null> => {
+    if (!(await persist())) {
+      toast.error(isRu ? `Сначала ${blockerText(blocker) || 'сохраните черновик'}` : `Avval ${blockerText(blocker) || 'qoralamani saqlang'}`);
+      return null;
+    }
+    return draftRef.current.docId || null;
+  };
+
   /** Step 1: the server validates the file and returns the lines it would save. */
   const handlePreviewImport = async () => {
-    if (!importFile || !token || !companyId || !selectedDocId) return;
+    if (!importFile || !token || !companyId) return;
     setImporting(true);
     setImportErrors([]);
     setImportPreview(null);
     try {
-      const result = await apiFetch<ImportValidationResult>(openingBalanceImportPaths(selectedDocId).preview, {
+      const id = await ensureDraftId();
+      if (!id) return;
+      const result = await apiFetch<ImportValidationResult>(openingBalanceImportPaths(id).preview, {
         token,
         tenantId: companyId,
         locale,
@@ -538,9 +638,6 @@ export default function OpeningBalancesPage() {
       });
       setImportPreview(result);
       setImportErrors(result.errors);
-      if (result.errors.length > 0) {
-        toast.error(isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi');
-      }
     } catch (e) {
       toast.error(e instanceof Error ? e.message : isRu ? 'Ошибка загрузки файла' : 'Faylni yuklashda xatolik');
     } finally {
@@ -548,29 +645,31 @@ export default function OpeningBalancesPage() {
     }
   };
 
-  /** Step 2: save the previewed lines into the draft document. */
+  /** Step 2: save the previewed lines into the draft. */
   const handleCommitImport = async () => {
-    if (!importFile || !token || !companyId || !selectedDocId) return;
+    const id = draftRef.current.docId;
+    if (!importFile || !token || !companyId || !id) return;
     setImporting(true);
     try {
       const result = await apiFetch<{ success: boolean; message: string; errors?: ImportErrorItem[] }>(
-        openingBalanceImportPaths(selectedDocId).commit,
+        openingBalanceImportPaths(id).commit,
         { token, tenantId: companyId, locale, method: 'POST', body: importFormData(importFile) },
       );
       if (!result.success) {
         setImportErrors(result.errors ?? []);
-        toast.error(result.message || (isRu ? 'Ошибки валидации Excel' : 'Excel faylda xatoliklar aniqlandi'));
         return;
       }
       closeImportModal();
       toast.success(result.message);
-      loadDocumentDetails(selectedDocId);
+      applyDocument(await fetchDocument(id));
     } catch (e) {
       toast.error(e instanceof Error ? e.message : isRu ? 'Ошибка импорта' : 'Yuklashda xatolik');
     } finally {
       setImporting(false);
     }
   };
+
+  const importSummary = importPreview ? summarizeImportPreview(importPreview) : null;
 
   // ─── Line editing ──────────────────────────────────────────────
 
@@ -580,11 +679,13 @@ export default function OpeningBalancesPage() {
     // One warehouse: nothing to choose.
     if (category === 'INVENTORY' && warehouses.length === 1) newLine.warehouseId = warehouses[0].id;
     setLines((prev) => [...prev, newLine]);
+    markEdited();
   };
 
   const removeLine = (index: number) => {
     if (isReadOnly) return;
     setLines((prev) => prev.filter((_, i) => i !== index));
+    markEdited();
   };
 
   const updateLineField = (index: number, field: keyof OpeningBalanceLine, value: LineValue) => {
@@ -614,6 +715,17 @@ export default function OpeningBalancesPage() {
       updated[index] = target;
       return updated;
     });
+    markEdited();
+  };
+
+  const changeOpeningDate = (value: string) => {
+    setOpeningDate(value);
+    markEdited();
+  };
+
+  const changeUsdRate = (value: string) => {
+    setUsdRate(value);
+    markEdited();
   };
 
   const handleQuickCreated = async (id: string) => {
@@ -625,6 +737,7 @@ export default function OpeningBalancesPage() {
         const product = await apiFetch<Product>(`/inventory/products/${id}`, requestOptions);
         setProducts((prev) => [product, ...prev.filter((p) => p.id !== product.id)]);
         setLines((prev) => prev.map((line, i) => (i === target.index ? withProductCost({ ...line, productId: product.id }, product) : line)));
+        markEdited();
       } else if (target.kind === 'counterparty') {
         const counterparty = await apiFetch<Counterparty>(`/sales/counterparties/${id}`, requestOptions);
         setCounterparties((prev) => [counterparty, ...prev.filter((c) => c.id !== counterparty.id)]);
@@ -641,378 +754,305 @@ export default function OpeningBalancesPage() {
     setFixedAssets((prev) => [asset, ...prev.filter((a) => a.id !== asset.id)]);
     if (target?.kind !== 'fixedAsset') return;
     setLines((prev) => prev.map((line, i) => (i === target.index ? withRegisterAsset(line, asset) : line)));
+    markEdited();
   };
 
-  // ─── View helpers ──────────────────────────────────────────────
+  // ─── View data ─────────────────────────────────────────────────
 
-  const getDocStatusBadge = (st: OpeningBalanceStatus) => {
-    switch (st) {
-      case 'DRAFT':
-        return <Badge variant="warning">{isRu ? 'Черновик' : 'Qoralama'}</Badge>;
-      case 'PENDING_REVIEW':
-        return <Badge variant="info">{isRu ? 'На проверке' : 'Tekshirishda'}</Badge>;
-      case 'POSTED':
-        return <Badge variant="success">{isRu ? 'Проведён' : 'Tasdiqlangan'}</Badge>;
-      case 'CANCELLED':
-        return <Badge variant="error">{isRu ? 'Отменён' : 'Bekor qilingan'}</Badge>;
-      default:
-        return <Badge variant="neutral">{st}</Badge>;
-    }
-  };
+  const sections = useMemo(() => {
+    const of = (key: SectionKey) => linesWhere(effectiveLines, (l) => sectionOf(l.category) === key);
+    return { cash: of('cash'), inventory: of('inventory'), debts: of('debts'), fixedAssets: of('fixed-assets'), other: of('other') };
+  }, [effectiveLines]);
 
+  const hasUsdLines = lines.some((l) => l.currency === 'USD');
   const documentOptions: SelectOption[] = documents.map((d) => ({
     value: d.id,
-    label: `${d.docNumber} (${d.openingDate ? d.openingDate.slice(0, 10) : ''}) — ${
-      d.status === 'POSTED' ? (isRu ? 'Проведён' : 'Tasdiqlangan') : isRu ? 'Черновик' : 'Qoralama'
+    label: `${d.openingDate ? d.openingDate.slice(0, 10) : ''} — ${
+      d.status === 'POSTED' ? (isRu ? 'проведён' : 'tasdiqlangan') : isRu ? 'черновик' : 'qoralama'
     }`,
   }));
 
-  const tabCounts = useMemo(() => {
-    const counts = { cash: 0, inventory: 0, debts: 0, fixedAssets: 0, other: 0 };
-    for (const l of lines) {
-      if (CASH_CATEGORIES.has(String(l.category))) counts.cash++;
-      else if (l.category === 'INVENTORY') counts.inventory++;
-      else if (isCounterpartyLineKind(l.category)) counts.debts++;
-      else if (l.category === 'FIXED_ASSET') counts.fixedAssets++;
-      else counts.other++;
-    }
-    return counts;
-  }, [lines]);
-
-  // Each section asks one plain question; the list shows it until lines exist.
-  const navTabs = [
-    { key: 'cash' as TabKey, label: isRu ? 'Деньги' : 'Pul', question: isRu ? 'Сколько денег в кассах и на счетах?' : 'Kassa va bankda qancha pul bor?', icon: Wallet, count: tabCounts.cash },
-    { key: 'inventory' as TabKey, label: isRu ? 'Товары' : 'Tovarlar', question: isRu ? 'Что и сколько лежит на складе?' : 'Omborda nima va qancha bor?', icon: Package, count: tabCounts.inventory },
-    { key: 'debts' as TabKey, label: isRu ? 'Долги' : 'Qarzlar', question: isRu ? 'Кто кому должен?' : 'Kim kimga qarz?', icon: Users, count: tabCounts.debts },
-    { key: 'fixed-assets' as TabKey, label: isRu ? 'Оборудование и здания' : 'Uskuna va binolar', question: isRu ? 'Станки, машины, здания (если есть)' : 'Stanok, mashina, bino (bo‘lsa)', icon: Building, count: tabCounts.fixedAssets },
-    { key: 'other' as TabKey, label: isRu ? 'Уставный капитал' : 'Ustav kapitali', question: isRu ? 'Обычно можно пропустить' : 'Odatda o‘tkazib yuborsa bo‘ladi', icon: Layers, count: tabCounts.other },
-  ];
-
   const tableProps = { lines, isReadOnly, locale, isRu, onUpdate: updateLineField, onRemove: removeLine };
+  const amountOf = (line: OpeningBalanceDraftLine) => Number(line.amount || 0);
+  const countText = (n: number) => {
+    if (!isRu) return `${n} ta qator`;
+    const [m10, m100] = [n % 10, n % 100];
+    const word = m10 === 1 && m100 !== 11 ? 'строка' : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? 'строки' : 'строк';
+    return `${n} ${word}`;
+  };
 
   // ─── Render ────────────────────────────────────────────────────
 
+  if (!loaded) {
+    return (
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--color-text-secondary)', fontSize: 'var(--text-sm)' }}>
+        <Loader2 size={16} className="app-spinner" aria-hidden />
+        {isRu ? 'Загрузка…' : 'Yuklanmoqda…'}
+      </div>
+    );
+  }
+
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
+    <div className="ob-page">
       {/* Header */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-        <div style={{ maxWidth: 720 }}>
+        <div style={{ maxWidth: 680 }}>
           <h1 style={{ fontSize: 'var(--text-2xl)', fontWeight: 'var(--font-bold)', color: 'var(--color-text-primary)', margin: 0 }}>
             {isRu ? 'Начальные остатки' : 'Boshlang‘ich qoldiqlar'}
           </h1>
           <p style={{ margin: '6px 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
             {isRu
-              ? 'Что было у компании в день, когда вы начинаете работать в программе: деньги в кассах, товар на складе, кто кому должен. Вводится один раз.'
-              : 'Dasturda ishlashni boshlagan kuningizda kompaniyada nima bor edi: kassadagi pul, ombordagi tovar, kim kimga qarz. Bir marta kiritiladi.'}
+              ? 'Один раз запишите, что было у компании в день начала работы в программе. Заполняйте сверху вниз — всё сохраняется само.'
+              : 'Dasturda ishlashni boshlagan kuningizda kompaniyada nima bor edi — shuni bir marta yozing. Yuqoridan pastga to‘ldiring, hammasi o‘zi saqlanadi.'}
           </p>
         </div>
-        {currentDoc && !isReadOnly && (
-          <Button variant="secondary" onClick={() => setShowImportModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+        {!isReadOnly && (
+          <Button variant="secondary" onClick={() => setShowImportModal(true)}>
             <FileSpreadsheet size={16} aria-hidden />
             <span>{isRu ? 'Загрузить из Excel' : 'Exceldan yuklash'}</span>
           </Button>
         )}
       </div>
 
-      {documentsLoaded && documents.length === 0 ? (
-        <Card style={{ padding: 'var(--space-8)', textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 'var(--space-3)' }}>
-          <Layers size={36} color="var(--color-primary-600)" />
-          <h3 style={{ margin: 0, fontSize: 'var(--text-lg)', color: 'var(--color-text-primary)' }}>
-            {isRu ? 'Остатки ещё не вводились' : 'Boshlang‘ich qoldiqlar hali kiritilmagan'}
-          </h3>
-          <ol style={{ margin: 0, paddingLeft: 20, maxWidth: 520, textAlign: 'left', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)', display: 'flex', flexDirection: 'column', gap: 4 }}>
-            <li>{isRu ? 'Выберите дату — с какого дня вы ведёте учёт в программе.' : 'Sanani tanlang — dasturda qaysi kundan hisob yuritasiz.'}</li>
-            <li>{isRu ? 'Заполните то, что у вас есть: деньги, товары, долги. Ненужное пропустите.' : 'Bor narsani kiriting: pul, tovar, qarzlar. Keraksizini o‘tkazib yuboring.'}</li>
-            <li>{isRu ? 'Нажмите «Провести» — остатки появятся в кассах, на складе и в расчётах.' : '«Tasdiqlash»ni bosing — qoldiqlar kassa, ombor va hisob-kitoblarda paydo bo‘ladi.'}</li>
-          </ol>
-          <Button variant="primary" onClick={() => setShowNewDocModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={16} />
-            <span>{isRu ? 'Начать ввод остатков' : 'Qoldiqlarni kiritishni boshlash'}</span>
-          </Button>
-        </Card>
-      ) : (
-        <>
-          {/* Document bar: which date, which state, what to do */}
-          <Card style={{ padding: 'var(--space-4)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', flexWrap: 'wrap', gap: 'var(--space-4)' }}>
-              <div style={{ display: 'flex', alignItems: 'flex-end', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Документ' : 'Hujjat'}
-                  </span>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', minHeight: 32 }}>
-                    {documents.length > 1 ? (
-                      <div style={{ width: '260px' }}>
-                        <Select options={documentOptions} value={selectedDocId} onChange={setSelectedDocId} placeholder={isRu ? 'Выберите документ' : 'Hujjatni tanlang'} size="sm" />
-                      </div>
-                    ) : (
-                      <strong style={{ color: 'var(--color-text-primary)' }}>{currentDoc?.docNumber}</strong>
-                    )}
-                    {currentDoc && getDocStatusBadge(currentDoc.status)}
-                  </div>
+      {/* Step 0: the date (and, when needed, the USD rate) */}
+      <Card style={{ padding: 'var(--space-5)' }}>
+        <div className="ob-date-row">
+          <label className="ob-field">
+            <span className="ob-field-label">{isRu ? 'С какого дня вы ведёте учёт в программе?' : 'Qaysi kundan boshlab dasturda hisob yuritasiz?'}</span>
+            <div style={{ width: 180 }}>
+              <DatePicker value={openingDate} onChange={changeOpeningDate} disabled={isReadOnly} />
+            </div>
+            <span className="ob-field-hint">{isRu ? 'Ниже вводятся остатки на начало этого дня.' : 'Quyida shu kun boshidagi qoldiqlar kiritiladi.'}</span>
+          </label>
+
+          {/* The rate matters only once a line is in dollars. */}
+          {(hasUsdLines || Number(usdRate) > 0) && (
+            <label className="ob-field" data-testid="document-usd-rate">
+              <span className="ob-field-label">{isRu ? 'Курс доллара в этот день' : 'Shu kundagi dollar kursi'}</span>
+              <MoneyInput
+                value={usdRate}
+                disabled={isReadOnly}
+                onValueChange={changeUsdRate}
+                decimals={4}
+                placeholder={isRu ? 'например, 12 800' : 'masalan, 12 800'}
+                aria-label={isRu ? 'Курс USD к UZS на дату остатков' : 'Qoldiq sanasidagi USD ning UZS kursi'}
+                style={{ width: 180, borderColor: needsUsdRate(lines, usdRate) && !isReadOnly ? 'var(--color-warning-500)' : undefined }}
+              />
+              <span className="ob-field-hint">{isRu ? '1 USD = ? сум. Нужен, потому что есть суммы в долларах.' : '1 USD = ? so‘m. Dollardagi summalar borligi uchun kerak.'}</span>
+            </label>
+          )}
+
+          <div className="ob-status">
+            {isPosted ? (
+              <Badge variant="success">{isRu ? 'Проведено' : 'Tasdiqlangan'}</Badge>
+            ) : (
+              <SaveStatus state={saveState} blocker={blockerText(blocker)} error={saveError} hasDraft={Boolean(currentDoc)} isRu={isRu} onRetry={() => void persist()} />
+            )}
+          </div>
+        </div>
+
+        {ratesWereMixed && !isReadOnly && (
+          <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
+            {isRu
+              ? 'В строках были разные курсы USD. Теперь ко всем долларовым строкам применяется один курс сверху.'
+              : 'Qatorlarda turli USD kurslari bor edi. Endi barcha dollardagi qatorlarga yuqoridagi bitta kurs qo‘llanadi.'}
+          </p>
+        )}
+
+        {isPosted && <PostedLinks isRu={isRu} onFix={() => setShowUnpostModal(true)} />}
+
+        {(documents.length > 1 || isPosted) && (
+          <div className="ob-docs">
+            {documents.length > 1 && (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span>{isRu ? 'Другие остатки:' : 'Boshqa qoldiqlar:'}</span>
+                <div style={{ width: 240 }}>
+                  <Select options={documentOptions} value={currentDoc?.id ?? ''} onChange={(id) => void switchDocument(id)} placeholder={isRu ? 'Новый (не сохранён)' : 'Yangi (saqlanmagan)'} size="sm" />
                 </div>
-
-                <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                    {isRu ? 'Остатки на дату' : 'Qaysi kundagi holat'}
-                  </span>
-                  <div style={{ width: '160px' }}>
-                    <DatePicker value={openingDate} onChange={setOpeningDate} disabled={isReadOnly} size="sm" />
-                  </div>
-                </label>
-
-                {/* The rate matters only once a line is in dollars. */}
-                {(hasUsdLines || Number(usdRate) > 0) && (
-                  <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }} data-testid="document-usd-rate">
-                    <span style={{ fontSize: 'var(--text-xs)', fontWeight: 500, color: 'var(--color-text-secondary)' }}>
-                      {isRu ? '1 USD = ? UZS на эту дату' : 'Shu kuni 1 USD = ? UZS'}
-                    </span>
-                    <MoneyInput
-                      value={usdRate}
-                      disabled={isReadOnly}
-                      onValueChange={setUsdRate}
-                      decimals={4}
-                      placeholder={isRu ? 'обязательно' : 'majburiy'}
-                      aria-label={isRu ? 'Курс USD к UZS на дату остатков' : 'Qoldiq sanasidagi USD ning UZS kursi'}
-                      style={{ width: 150, borderColor: needsUsdRate(lines, usdRate) && !isReadOnly ? 'var(--color-warning-500)' : undefined }}
-                    />
-                  </label>
-                )}
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', flexWrap: 'wrap' }}>
-                {currentDoc && !isReadOnly && (
-                  <>
-                    <Button aria-label={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} title={isRu ? 'Удалить черновик' : 'Qoralamani o‘chirish'} variant="danger-ghost" size="sm" onClick={handleDeleteDocument} disabled={actionLoading}>
-                      <Trash2 size={14} aria-hidden />
-                    </Button>
-                    <Button variant="secondary" size="sm" onClick={handleSaveLines} disabled={actionLoading} title={isRu ? 'Сохранить черновик и продолжить позже' : 'Qoralamani saqlab, keyin davom ettirish'}>
-                      <Save size={14} aria-hidden />
-                      <span>{isRu ? 'Сохранить черновик' : 'Qoralamani saqlash'}</span>
-                    </Button>
-                    <Button variant="primary" size="sm" onClick={handlePost} loading={actionLoading} loadingText={isRu ? 'Подождите…' : 'Kuting…'}>
-                      <CheckCircle2 size={14} aria-hidden />
-                      <span>{isRu ? 'Провести' : 'Tasdiqlash'}</span>
-                    </Button>
-                  </>
-                )}
-                {currentDoc && isPosted && (
-                  <Button variant="danger-outline" size="sm" onClick={() => setShowUnpostModal(true)} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <RotateCcw size={14} aria-hidden />
-                    <span>{isRu ? 'Исправить (переоткрыть)' : 'Tuzatish (qayta ochish)'}</span>
-                  </Button>
-                )}
-              </div>
-            </div>
-            {hasUsdLines && !isReadOnly && (
-              <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-                {isRu
-                  ? 'Есть строки в долларах: по этому курсу они пересчитаются в сумы для итогов и бухгалтерии.'
-                  : 'Dollardagi qatorlar bor: jami va buxgalteriya uchun ular shu kurs bo‘yicha so‘mga o‘tkaziladi.'}
-              </p>
-            )}
-            {ratesWereMixed && !isReadOnly && (
-              <p style={{ margin: 'var(--space-3) 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
-                {isRu
-                  ? 'В строках были разные курсы USD. При сохранении ко всем USD-строкам будет применён один курс документа.'
-                  : 'Qatorlarda turli USD kurslari bor edi. Saqlaganda barcha USD qatorlariga hujjatning bitta kursi qo‘llanadi.'}
-              </p>
-            )}
-            {isPosted && <PostedLinks isRu={isRu} />}
-            {documents.length > 0 && (
-              <div style={{ marginTop: 'var(--space-3)' }}>
-                <button type="button" onClick={() => setShowNewDocModal(true)} style={{ background: 'none', border: 'none', padding: 0, minHeight: 32, cursor: 'pointer', fontSize: 'var(--text-xs)', color: 'var(--color-text-secondary)', display: 'inline-flex', alignItems: 'center', gap: 4 }}>
-                  <Plus size={12} aria-hidden />
-                  {isRu ? 'Нужна ещё одна дата? Создать новый документ' : 'Boshqa sana kerakmi? Yangi hujjat yaratish'}
-                </button>
               </div>
             )}
-          </Card>
+            {isPosted && (
+              <Button variant="ghost" size="sm" onClick={startNewDraft}>
+                <Plus size={14} aria-hidden />
+                <span>{isRu ? 'Остатки на другую дату' : 'Boshqa sanaga qoldiq kiritish'}</span>
+              </Button>
+            )}
+          </div>
+        )}
+      </Card>
 
-          {/* Summary in plain words: what the company has, what it owes, and the difference */}
-          <StatCardGrid label={isRu ? 'Итоги' : 'Yakunlar'} count={3}>
-            <StatCard
-              label={isRu ? 'Что есть у компании' : 'Kompaniyada bor'}
-              value={formatCurrency(totals.totalAssets, locale, docCurrency)}
-              secondary={isRu ? 'Деньги + товары + долги вам + основные средства' : 'Pul + tovar + sizga qarzlar + asosiy vositalar'}
-            />
-            <StatCard
-              label={isRu ? 'Что компания должна' : 'Kompaniya qarzi'}
-              value={formatCurrency(totals.totalLiabilities, locale, docCurrency)}
-              secondary={isRu ? 'Долги поставщикам и полученные авансы' : 'Yetkazib beruvchilarga qarz va olingan avanslar'}
-            />
-            <StatCard
-              label={isRu ? 'Собственный капитал' : 'O‘z kapitali'}
-              value={formatCurrency(totals.totalEquity, locale, docCurrency)}
-              negative={totals.totalEquity < 0}
-              secondary={
-                totals.enteredEquity !== 0
-                  ? isRu
-                    ? `Есть − должна. Из них уставный: ${formatCurrency(totals.enteredEquity, locale, docCurrency)}`
-                    : `Bor − qarz. Shundan ustav kapitali: ${formatCurrency(totals.enteredEquity, locale, docCurrency)}`
-                  : isRu
-                    ? 'Есть − должна. Считается сам, вводить не нужно'
-                    : 'Bor − qarz. O‘zi hisoblanadi, kiritish shart emas'
-              }
-            />
-          </StatCardGrid>
-          {!totals.hasValidCurrencyRates && !isReadOnly && (
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
-              <AlertTriangle size={16} aria-hidden />
-              <span>
-                {isRu
-                  ? 'Строки без валюты или USD-строки без курса не входят в итоги.'
-                  : 'Valyutasiz qatorlar yoki kurssiz USD qatorlari jamiga kirmaydi.'}
+      {/* Sections, top to bottom */}
+      <Section
+        n={1}
+        title={isRu ? 'Сколько денег в кассах и на счетах?' : 'Kassa va bankda qancha pul bor?'}
+        hint={isRu ? 'По строке на каждую кассу или банковский счёт.' : 'Har bir kassa yoki bank hisobi uchun bitta qator.'}
+        count={sections.cash.length}
+        summary={sumsByCurrency(sections.cash, amountOf, locale)}
+        isReadOnly={isReadOnly}
+        isRu={isRu}
+        onAdd={() => addLine('CASH')}
+        addText={isRu ? 'Добавить кассу или счёт' : 'Kassa yoki hisob qo‘shish'}
+        emptyText={isRu ? 'Денег нет — просто пропустите.' : 'Pul bo‘lmasa, o‘tkazib yuboring.'}
+      >
+        <CashTable {...tableProps} accounts={accounts} />
+      </Section>
+
+      <Section
+        n={2}
+        title={isRu ? 'Что и сколько лежит на складе?' : 'Omborda nima va qancha bor?'}
+        hint={
+          isRu
+            ? 'Товар, количество и закупочная цена одной штуки (подставится из карточки). По ней потом считается прибыль.'
+            : 'Tovar, miqdori va bittasining olingan narxi (kartochkadan o‘zi qo‘yiladi). Foyda keyin shu narxdan hisoblanadi.'
+        }
+        count={sections.inventory.length}
+        summary={sumsByCurrency(sections.inventory, amountOf, locale)}
+        isReadOnly={isReadOnly}
+        isRu={isRu}
+        onAdd={() => addLine('INVENTORY')}
+        addText={isRu ? 'Добавить товар' : 'Tovar qo‘shish'}
+        emptyText={isRu ? 'Товаров много? Загрузите их из Excel кнопкой вверху.' : 'Tovar ko‘pmi? Yuqoridagi tugma bilan Exceldan yuklang.'}
+      >
+        <InventoryTable
+          {...tableProps}
+          products={products}
+          warehouses={warehouses}
+          onCreateProduct={(index) => setQuickCreate({ kind: 'product', index })}
+        />
+      </Section>
+
+      <Section
+        n={3}
+        title={isRu ? 'Кто кому должен?' : 'Kim kimga qarz?'}
+        hint={
+          isRu
+            ? 'Одна строка — один клиент или поставщик. Когда долг оплатят, он закроется сам.'
+            : 'Bitta qator — bitta mijoz yoki yetkazib beruvchi. Qarz to‘langanda o‘zi yopiladi.'
+        }
+        count={sections.debts.length}
+        summary={sections.debts.length > 0 ? countText(sections.debts.length) : null}
+        isReadOnly={isReadOnly}
+        isRu={isRu}
+        onAdd={() => addLine('CUSTOMER_DEBT')}
+        addText={isRu ? 'Добавить долг' : 'Qarz qo‘shish'}
+        emptyText={isRu ? 'Долгов нет — пропустите.' : 'Qarz bo‘lmasa, o‘tkazib yuboring.'}
+      >
+        <DebtsTable
+          {...tableProps}
+          counterparties={counterparties}
+          onCreateCounterparty={(index, type) => setQuickCreate({ kind: 'counterparty', index, type })}
+        />
+      </Section>
+
+      <Section
+        n={4}
+        optional
+        title={isRu ? 'Оборудование, машины, здания' : 'Uskuna, mashina, binolar'}
+        hint={
+          isRu
+            ? 'То, чем компания пользуется годами (основные средства). Нет — пропустите.'
+            : 'Kompaniya yillab foydalanadigan narsalar (asosiy vositalar). Bo‘lmasa, o‘tkazib yuboring.'
+        }
+        count={sections.fixedAssets.length}
+        summary={sumsByCurrency(sections.fixedAssets, (l) => Math.max(0, Number(l.amount || 0) - Number(l.accumulatedDepreciation || 0)), locale)}
+        isReadOnly={isReadOnly}
+        isRu={isRu}
+        onAdd={() => addLine('FIXED_ASSET')}
+        addText={isRu ? 'Добавить' : 'Qo‘shish'}
+        emptyText={null}
+      >
+        <FixedAssetsTable
+          {...tableProps}
+          fixedAssets={fixedAssets}
+          currency={docCurrency}
+          onCreateAsset={(index) => setQuickCreate({ kind: 'fixedAsset', index })}
+        />
+      </Section>
+
+      <Section
+        n={5}
+        optional
+        title={isRu ? 'Уставный капитал и прочее' : 'Ustav kapitali va boshqalar'}
+        hint={
+          isRu
+            ? 'Обычно не нужно: капитал программа посчитает сама. Впишите уставный капитал, если об этом просит бухгалтер.'
+            : 'Odatda kerak emas: kapitalni dastur o‘zi hisoblaydi. Buxgalter so‘rasa, ustav kapitalini yozing.'
+        }
+        count={sections.other.length}
+        summary={null}
+        isReadOnly={isReadOnly}
+        isRu={isRu}
+        onAdd={() => addLine('EQUITY')}
+        addText={isRu ? 'Добавить' : 'Qo‘shish'}
+        emptyText={null}
+      >
+        <OtherTable {...tableProps} />
+      </Section>
+
+      {/* Check and confirm */}
+      <Card style={{ padding: 'var(--space-5)' }}>
+        <h2 className="ob-h2">{isPosted ? (isRu ? 'Итог' : 'Yakun') : isRu ? 'Проверьте и проведите' : 'Tekshiring va tasdiqlang'}</h2>
+        <div className="ob-equation" aria-label={isRu ? 'Итоги' : 'Yakunlar'}>
+          <div className="ob-eq-item">
+            <span className="ob-eq-label">{isRu ? 'Есть у компании' : 'Kompaniyada bor'}</span>
+            <strong className="tabular-nums">{formatCurrency(totals.totalAssets, locale, docCurrency)}</strong>
+            <span className="ob-eq-hint">{isRu ? 'деньги, товары, долги вам, оборудование' : 'pul, tovar, sizga qarzlar, uskunalar'}</span>
+          </div>
+          <span className="ob-eq-op" aria-hidden>−</span>
+          <div className="ob-eq-item">
+            <span className="ob-eq-label">{isRu ? 'Компания должна' : 'Kompaniya qarzi'}</span>
+            <strong className="tabular-nums">{formatCurrency(totals.totalLiabilities, locale, docCurrency)}</strong>
+            <span className="ob-eq-hint">{isRu ? 'поставщикам и полученные предоплаты' : 'yetkazib beruvchilarga va olingan oldindan to‘lovlar'}</span>
+          </div>
+          <span className="ob-eq-op" aria-hidden>=</span>
+          <div className="ob-eq-item" data-result="true">
+            <span className="ob-eq-label">{isRu ? 'Собственный капитал' : 'O‘z kapitali'}</span>
+            <strong className="tabular-nums" style={{ color: totals.totalEquity < 0 ? 'var(--color-error-700)' : undefined }}>
+              {formatCurrency(totals.totalEquity, locale, docCurrency)}
+            </strong>
+            <span className="ob-eq-hint">
+              {totals.enteredEquity !== 0
+                ? isRu
+                  ? `из них уставный ${formatCurrency(totals.enteredEquity, locale, docCurrency)}`
+                  : `shundan ustav kapitali ${formatCurrency(totals.enteredEquity, locale, docCurrency)}`
+                : isRu
+                  ? 'считается сам'
+                  : 'o‘zi hisoblanadi'}
+            </span>
+          </div>
+        </div>
+        {hasUsdLines && (
+          <p className="ob-field-hint" style={{ margin: 'var(--space-3) 0 0' }}>
+            {isRu ? 'Долларовые суммы пересчитаны в сумы по курсу вверху.' : 'Dollardagi summalar yuqoridagi kurs bo‘yicha so‘mga o‘tkazilgan.'}
+          </p>
+        )}
+        {!totals.hasValidCurrencyRates && !isReadOnly && (
+          <p style={{ display: 'flex', gap: 8, alignItems: 'center', margin: 'var(--space-3) 0 0', fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
+            <AlertTriangle size={16} aria-hidden />
+            {isRu ? 'Строки без валюты или без курса доллара пока не вошли в итог.' : 'Valyutasiz yoki dollar kursisiz qatorlar hali jamiga kirmagan.'}
+          </p>
+        )}
+
+        {!isReadOnly && (
+          <div className="ob-final-actions">
+            {(currentDoc || lines.length > 0) && (
+              <Button variant="danger-ghost" size="sm" onClick={handleClearDraft} disabled={actionLoading}>
+                <Trash2 size={14} aria-hidden />
+                <span>{isRu ? 'Очистить всё' : 'Hammasini tozalash'}</span>
+              </Button>
+            )}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)', marginLeft: 'auto', flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <span className="ob-field-hint">
+                {isRu ? 'После проведения остатки появятся в кассах, на складе и в расчётах.' : 'Tasdiqlangach, qoldiqlar kassa, ombor va hisob-kitoblarda paydo bo‘ladi.'}
               </span>
+              <Button variant="primary" size="lg" onClick={handlePost} loading={actionLoading} loadingText={isRu ? 'Подождите…' : 'Kuting…'} disabled={lines.length === 0}>
+                <CheckCircle2 size={18} aria-hidden />
+                <span>{isRu ? 'Провести остатки' : 'Qoldiqlarni tasdiqlash'}</span>
+              </Button>
             </div>
-          )}
-
-          {/* Sections as a numbered checklist on the left; the chosen section on the right, with "next section" at its end */}
-          <div className="ob-layout">
-          <nav className="ob-steps" aria-label={tob('sections')}>
-            <ol>
-              {navTabs.map((tab, i) => {
-                const Icon = tab.icon;
-                const isActive = activeTab === tab.key;
-                return (
-                  <li key={tab.key}>
-                    <button type="button" aria-current={isActive ? 'step' : undefined} onClick={() => setActiveTab(tab.key)} className="ob-step" data-active={isActive ? 'true' : undefined}>
-                      <span className="ob-step-num" data-done={tab.count > 0 ? 'true' : undefined} aria-hidden>
-                        {tab.count > 0 ? <Check size={14} /> : i + 1}
-                      </span>
-                      <span style={{ minWidth: 0 }}>
-                        <span style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <Icon size={14} aria-hidden /> {tab.label}
-                        </span>
-                        <span className="rd-sub" style={{ display: 'block' }}>
-                          {tab.count > 0 ? tob('linesCount', { count: tab.count }) : tab.question}
-                        </span>
-                      </span>
-                    </button>
-                  </li>
-                );
-              })}
-            </ol>
-            <p className="doc-aside-hint" style={{ padding: '0 var(--space-2)' }}>{tob('stepsHint')}</p>
-          </nav>
-          <div style={{ minWidth: 0, display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}>
-          {activeTab === 'cash' && (
-            <SubledgerCard
-              title={isRu ? 'Сколько денег в кассах и на счетах?' : 'Kassa va bankda qancha pul bor?'}
-              hint={
-                isRu
-                  ? 'По строке на каждую кассу или банковский счёт: выберите её и впишите сумму на эту дату.'
-                  : 'Har bir kassa yoki bank hisobi uchun bitta qator: uni tanlang va shu kundagi summani yozing.'
-              }
-              isReadOnly={isReadOnly}
-              onAdd={() => addLine('CASH')}
-              addText={isRu ? 'Добавить кассу' : 'Kassa qo‘shish'}
-            >
-              <CashTable {...tableProps} accounts={accounts} />
-            </SubledgerCard>
-          )}
-
-          {activeTab === 'inventory' && (
-            <SubledgerCard
-              title={isRu ? 'Что и сколько лежит на складе?' : 'Omborda nima va qancha bor?'}
-              hint={
-                isRu
-                  ? 'Товар, количество и за сколько вы купили одну штуку (цена подставится из карточки товара). По этой цене потом посчитается прибыль от продаж.'
-                  : 'Tovar, miqdori va bittasini qanchaga olgansiz (narx tovar kartochkasidan o‘zi qo‘yiladi). Sotuvdagi foyda keyin shu narxdan hisoblanadi.'
-              }
-              isReadOnly={isReadOnly}
-              onAdd={() => addLine('INVENTORY')}
-              addText={isRu ? 'Добавить товар' : 'Tovar qo‘shish'}
-            >
-              <InventoryTable
-                {...tableProps}
-                products={products}
-                warehouses={warehouses}
-                onCreateProduct={(index) => setQuickCreate({ kind: 'product', index })}
-              />
-            </SubledgerCard>
-          )}
-
-          {activeTab === 'debts' && (
-            <SubledgerCard
-              title={isRu ? 'Кто кому должен?' : 'Kim kimga qarz?'}
-              hint={
-                isRu
-                  ? 'Клиенты, которые должны вам, поставщики, которым должны вы, и предоплаты. Когда долг оплатят, он закроется сам.'
-                  : 'Sizga qarz mijozlar, siz qarz yetkazib beruvchilar va oldindan to‘lovlar. Qarz to‘langanda o‘zi yopiladi.'
-              }
-              isReadOnly={isReadOnly}
-              onAdd={() => addLine('CUSTOMER_DEBT')}
-              addText={isRu ? 'Добавить строку' : 'Qator qo‘shish'}
-            >
-              <DebtsTable
-                {...tableProps}
-                counterparties={counterparties}
-                onCreateCounterparty={(index, type) => setQuickCreate({ kind: 'counterparty', index, type })}
-              />
-            </SubledgerCard>
-          )}
-
-          {activeTab === 'fixed-assets' && (
-            <SubledgerCard
-              title={isRu ? 'Оборудование, машины, здания' : 'Uskuna, mashina, binolar'}
-              hint={
-                isRu
-                  ? 'Вещи, которыми компания пользуется долго (основные средства). Если их нет — пропустите этот раздел.'
-                  : 'Kompaniya uzoq foydalanadigan narsalar (asosiy vositalar). Bo‘lmasa, bu bo‘limni o‘tkazib yuboring.'
-              }
-              isReadOnly={isReadOnly}
-              onAdd={() => addLine('FIXED_ASSET')}
-              addText={isRu ? 'Добавить' : 'Qo‘shish'}
-            >
-              {/* B6 / D6: depreciation is not computed by the system after posting. */}
-              <p
-                data-testid="fixed-asset-depreciation-notice"
-                style={{ margin: 'var(--space-3) var(--space-5)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', color: 'var(--color-warning-700)', fontSize: 'var(--text-sm)' }}
-              >
-                {isRu
-                  ? 'Выберите вещь из списка или нажмите «Новое средство»: там же вписываются цена покупки и сколько она уже износилась (кнопка «Рассчитать» посчитает). Амортизация не рассчитывается автоматически и после проведения.'
-                  : 'Ro‘yxatdan tanlang yoki «Yangi asosiy vosita»ni bosing: u yerda sotib olingan narxi va qancha eskirgani yoziladi («Hisoblash» tugmasi hisoblab beradi). Eskirish tizimda avtomatik hisoblanmaydi, tasdiqlangandan keyin ham.'}
-              </p>
-              <FixedAssetsTable
-                {...tableProps}
-                fixedAssets={fixedAssets}
-                currency={docCurrency}
-                onCreateAsset={(index) => setQuickCreate({ kind: 'fixedAsset', index })}
-              />
-            </SubledgerCard>
-          )}
-
-          {activeTab === 'other' && (
-            <SubledgerCard
-              title={isRu ? 'Уставный капитал и прочее' : 'Ustav kapitali va boshqalar'}
-              hint={
-                isRu
-                  ? 'Необязательно. Впишите уставный капитал из устава, если бухгалтер просит. Остальной капитал программа посчитает сама.'
-                  : 'Ixtiyoriy. Buxgalter so‘rasa, nizomdagi ustav kapitalini yozing. Qolgan kapitalni dastur o‘zi hisoblaydi.'
-              }
-              isReadOnly={isReadOnly}
-              onAdd={() => addLine('EQUITY')}
-              addText={isRu ? 'Добавить' : 'Qo‘shish'}
-            >
-              <OtherTable {...tableProps} />
-            </SubledgerCard>
-          )}
-          {(() => {
-            const idx = navTabs.findIndex((t) => t.key === activeTab);
-            const next = navTabs[idx + 1];
-            return next ? (
-              <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
-                <Button variant="secondary" onClick={() => setActiveTab(next.key)}>
-                  {tob('nextSection', { name: next.label })} <ArrowRight size={16} aria-hidden />
-                </Button>
-              </div>
-            ) : null;
-          })()}
           </div>
-          </div>
-        </>
-      )}
+        )}
+      </Card>
 
       {quickCreate?.kind === 'product' && (
         <CreateProductDrawer isOpen onClose={() => setQuickCreate(null)} onSuccess={(created) => void handleQuickCreated(created.id)} />
@@ -1035,53 +1075,21 @@ export default function OpeningBalancesPage() {
         />
       )}
 
-      {/* New document */}
-      <Modal icon={<FilePlus2 size={20} />} isOpen={showNewDocModal} title={isRu ? 'Новый ввод остатков' : 'Yangi boshlang‘ich qoldiq hujjati'} onClose={() => setShowNewDocModal(false)}
-        footer={
-          <>
-            <Button data-dialog-cancel variant="secondary" onClick={() => setShowNewDocModal(false)}>
-              {isRu ? 'Отмена' : 'Bekor qilish'}
-            </Button>
-            <Button variant="primary" onClick={handleCreateDocument} disabled={actionLoading}>
-              {actionLoading ? (isRu ? 'Создание...' : 'Yaratilmoqda...') : isRu ? 'Создать' : 'Yaratish'}
-            </Button>
-          </>
-        }
-      >
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Дата, на которую вводятся остатки' : 'Qoldiqlar qaysi sanaga kiritiladi'}
-            </label>
-            <DatePicker value={newDocDate} onChange={setNewDocDate} />
-            <p style={{ margin: '6px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>
-              {isRu ? 'Номер документа присваивается автоматически.' : 'Hujjat raqami avtomatik beriladi.'}
-            </p>
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Примечание' : 'Izoh'}
-            </label>
-            <Input type="text" value={newDocNotes} onChange={(e) => setNewDocNotes(e.target.value)} placeholder={isRu ? 'Необязательно' : 'Ixtiyoriy'} />
-          </div>
-        </div>
-      </Modal>
-
       {/* Excel import (template download included) */}
-      <Modal icon={<FileSpreadsheet size={20} />} isOpen={showImportModal} title={isRu ? 'Импорт остатков из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}
+      <Modal icon={<FileSpreadsheet size={20} />} isOpen={showImportModal} title={isRu ? 'Загрузить остатки из Excel' : 'Qoldiqlarni Exceldan yuklash'} onClose={closeImportModal}
         footer={
           <>
             <Button data-dialog-cancel variant="secondary" onClick={closeImportModal}>
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             {importSummary?.canCommit ? (
-              <Button variant="primary" onClick={handleCommitImport} disabled={importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Save size={16} />
-                <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Сохранить в документ' : 'Hujjatga saqlash'}</span>
+              <Button variant="primary" onClick={handleCommitImport} disabled={importing}>
+                <Save size={16} aria-hidden />
+                <span>{importing ? (isRu ? 'Сохранение...' : 'Saqlanmoqda...') : isRu ? 'Загрузить на страницу' : 'Sahifaga yuklash'}</span>
               </Button>
             ) : (
-              <Button variant="primary" onClick={handlePreviewImport} disabled={!importFile || importing} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <Upload size={16} />
+              <Button variant="primary" onClick={handlePreviewImport} disabled={!importFile || importing}>
+                <Upload size={16} aria-hidden />
                 <span>{importing ? (isRu ? 'Проверка...' : 'Tekshirilmoqda...') : isRu ? 'Проверить файл' : 'Faylni tekshirish'}</span>
               </Button>
             )}
@@ -1094,21 +1102,22 @@ export default function OpeningBalancesPage() {
               <button
                 type="button"
                 onClick={handleDownloadTemplate}
-                style={{ background: 'none', border: 'none', padding: 0, color: 'var(--color-primary-600)', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                style={{ background: 'none', border: 'none', padding: 0, minHeight: 32, color: 'var(--color-primary-600)', cursor: 'pointer', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: 4 }}
               >
-                <Download size={14} />
+                <Download size={14} aria-hidden />
                 {isRu ? 'Скачайте шаблон' : 'Shablonni yuklab oling'}
               </button>
             </li>
             <li>{isRu ? 'Заполните листы (деньги, товары, клиенты, поставщики).' : 'Varaqlarni to‘ldiring (pul, tovar, mijozlar, yetkazib beruvchilar).'}</li>
-            <li>{isRu ? 'Выберите файл, проверьте и сохраните.' : 'Faylni tanlang, tekshiring va saqlang.'}</li>
+            <li>{isRu ? 'Выберите файл и нажмите «Проверить файл».' : 'Faylni tanlang va «Faylni tekshirish»ni bosing.'}</li>
           </ol>
 
           <div style={{ border: '2px dashed var(--color-border)', borderRadius: 'var(--radius-lg)', padding: 'var(--space-6)', textAlign: 'center', backgroundColor: 'var(--color-bg-subtle)' }}>
-            <FileSpreadsheet size={36} color="var(--color-primary-600)" style={{ margin: '0 auto 8px' }} />
+            <FileSpreadsheet size={36} color="var(--color-primary-600)" style={{ margin: '0 auto 8px' }} aria-hidden />
             <input
               type="file"
               accept=".xlsx,.xls"
+              aria-label={isRu ? 'Файл Excel' : 'Excel fayl'}
               onChange={(e) => {
                 resetImport();
                 setImportFile(e.target.files?.[0] ?? null);
@@ -1118,9 +1127,9 @@ export default function OpeningBalancesPage() {
           </div>
 
           {importErrors.length > 0 && (
-            <div style={{ backgroundColor: 'var(--color-error-50)', border: '1px solid var(--color-error-100)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', maxHeight: '180px', overflowY: 'auto' }}>
+            <div role="alert" style={{ backgroundColor: 'var(--color-error-50)', border: '1px solid var(--color-error-100)', borderRadius: 'var(--radius-md)', padding: 'var(--space-3)', maxHeight: '180px', overflowY: 'auto' }}>
               <span style={{ fontSize: 'var(--text-xs)', fontWeight: 700, color: 'var(--color-error-700)', display: 'block', marginBottom: '4px' }}>
-                {isRu ? 'Ошибки в файле Excel:' : 'Excel fayldagi xatoliklar:'}
+                {isRu ? 'В файле есть ошибки — исправьте их и выберите файл снова:' : 'Faylda xatolar bor — tuzatib, faylni qayta tanlang:'}
               </span>
               <ul style={{ margin: 0, paddingLeft: '18px', fontSize: 'var(--text-xs)', color: 'var(--color-error-700)' }}>
                 {importErrors.map((err, idx) => (
@@ -1140,9 +1149,9 @@ export default function OpeningBalancesPage() {
               <div>
                 {isRu ? 'Строк в файле' : 'Fayldagi qatorlar'}: <strong>{importPreview.totalRows}</strong>
                 {' · '}
-                {isRu ? 'Готово к сохранению' : 'Saqlashga tayyor'}: <strong>{importSummary.lineCount}</strong>
+                {isRu ? 'Готово' : 'Tayyor'}: <strong>{importSummary.lineCount}</strong>
                 {' · '}
-                {isRu ? 'Ошибок' : 'Xatoliklar'}: <strong>{importPreview.errors.length}</strong>
+                {isRu ? 'Ошибок' : 'Xatolar'}: <strong>{importPreview.errors.length}</strong>
               </div>
               {importSummary.byCategory.length > 0 && (
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
@@ -1153,13 +1162,13 @@ export default function OpeningBalancesPage() {
                   ))}
                 </div>
               )}
-              {importSummary.canCommit && (
+              {importSummary.canCommit && lines.length > 0 && (
                 <div style={{ display: 'flex', gap: '6px', alignItems: 'flex-start', color: 'var(--color-warning-700)' }}>
-                  <AlertTriangle size={16} style={{ flexShrink: 0 }} />
+                  <AlertTriangle size={16} style={{ flexShrink: 0 }} aria-hidden />
                   <span>
                     {isRu
-                      ? 'При сохранении все текущие строки черновика будут заменены строками из файла.'
-                      : 'Saqlaganda qoralamaning hozirgi barcha qatorlari fayldagi qatorlar bilan almashtiriladi.'}
+                      ? 'Строки на странице будут заменены строками из файла.'
+                      : 'Sahifadagi qatorlar fayldagi qatorlar bilan almashtiriladi.'}
                   </span>
                 </div>
               )}
@@ -1168,7 +1177,7 @@ export default function OpeningBalancesPage() {
         </div>
       </Modal>
 
-      {/* Unpost (rollback invariant) */}
+      {/* Fix a posted balance (rollback invariant) */}
       <Modal icon={<LockOpen size={20} />} tone="warning" isOpen={showUnpostModal} title={isRu ? 'Исправить остатки' : 'Qoldiqlarni tuzatish'} onClose={() => setShowUnpostModal(false)}
         footer={
           <>
@@ -1176,27 +1185,28 @@ export default function OpeningBalancesPage() {
               {isRu ? 'Отмена' : 'Bekor qilish'}
             </Button>
             <Button variant="danger" onClick={handleUnpost} disabled={actionLoading}>
-              {actionLoading ? (isRu ? 'Переоткрытие...' : 'Qayta ochilmoqda...') : isRu ? 'Переоткрыть' : 'Qayta ochish'}
+              {actionLoading ? (isRu ? 'Подождите...' : 'Kuting...') : isRu ? 'Открыть для исправления' : 'Tuzatish uchun ochish'}
             </Button>
           </>
         }
       >
         <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)', padding: 'var(--space-1)' }}>
           <div style={{ padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', backgroundColor: 'var(--color-warning-50)', border: '1px solid var(--color-warning-100)', display: 'flex', gap: '10px' }}>
-            <AlertTriangle size={20} color="var(--color-warning-700)" style={{ flexShrink: 0, marginTop: '2px' }} />
-            <p style={{ margin: 0, fontSize: 'var(--text-xs)', color: 'var(--color-warning-700)' }}>
+            <AlertTriangle size={20} color="var(--color-warning-700)" style={{ flexShrink: 0, marginTop: '2px' }} aria-hidden />
+            <p style={{ margin: 0, fontSize: 'var(--text-sm)', color: 'var(--color-warning-700)' }}>
               {isRu
-                ? 'Документ вернётся в черновик, а кассы, склады, расчёты и журнал — в состояние до проведения. Если товары из начальных партий уже проданы или деньги из кассы потрачены, переоткрыть нельзя.'
-                : 'Hujjat qoralamaga qaytadi, kassa, ombor, hisob-kitob va jurnal tasdiqlashdan oldingi holatiga qaytariladi. Boshlang‘ich partiyadagi tovar sotilgan yoki kassadagi pul sarflangan bo‘lsa, qayta ochib bo‘lmaydi.'}
+                ? 'Остатки уберутся из касс, склада и расчётов, страница снова станет редактируемой. Исправьте и проведите заново. Если товар из остатков уже продан или деньги потрачены, открыть нельзя.'
+                : 'Qoldiqlar kassa, ombor va hisob-kitoblardan olinadi, sahifa yana tahrirlanadigan bo‘ladi. Tuzating va qayta tasdiqlang. Qoldiqdagi tovar sotilgan yoki pul sarflangan bo‘lsa, ochib bo‘lmaydi.'}
             </p>
           </div>
           <div>
-            <label style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
-              {isRu ? 'Причина' : 'Sabab'}
+            <label htmlFor="ob-unpost-reason" style={{ display: 'block', fontSize: 'var(--text-xs)', fontWeight: 600, color: 'var(--color-text-secondary)', marginBottom: 6 }}>
+              {isRu ? 'Что нужно исправить (необязательно)' : 'Nimani tuzatmoqchisiz (ixtiyoriy)'}
             </label>
             <Input
+              id="ob-unpost-reason"
               type="text"
-              placeholder={isRu ? 'Например: исправление ошибки в остатках...' : 'Masalan: qoldiqdagi xatolikni tuzatish...'}
+              placeholder={isRu ? 'Например: неверное количество товара' : 'Masalan: tovar miqdori noto‘g‘ri'}
               value={unpostReason}
               onChange={(e) => setUnpostReason(e.target.value)}
             />
@@ -1211,9 +1221,50 @@ export default function OpeningBalancesPage() {
 // Building blocks
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** Saved / saving / what is missing — always next to the date, in plain words. */
+function SaveStatus({ state, blocker, error, hasDraft, isRu, onRetry }: {
+  state: SaveState;
+  blocker: string;
+  error: string;
+  hasDraft: boolean;
+  isRu: boolean;
+  onRetry: () => void;
+}) {
+  const style: React.CSSProperties = { display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 'var(--text-sm)' };
+  let content: React.ReactNode;
+  if (state === 'saving') {
+    content = (
+      <span style={{ ...style, color: 'var(--color-text-secondary)' }}>
+        <Loader2 size={14} className="app-spinner" aria-hidden /> {isRu ? 'Сохраняется…' : 'Saqlanmoqda…'}
+      </span>
+    );
+  } else if (state === 'blocked' && blocker) {
+    content = (
+      <span style={{ ...style, color: 'var(--color-warning-700)' }}>
+        <AlertTriangle size={14} aria-hidden /> {isRu ? `Не сохранено: ${blocker}` : `Saqlanmadi: ${blocker}`}
+      </span>
+    );
+  } else if (state === 'error') {
+    content = (
+      <span style={{ ...style, color: 'var(--color-error-700)', flexWrap: 'wrap' }}>
+        <AlertTriangle size={14} aria-hidden /> {isRu ? `Не сохранено: ${error}` : `Saqlanmadi: ${error}`}
+        <Button variant="secondary" size="sm" onClick={onRetry}>{isRu ? 'Повторить' : 'Qayta urinish'}</Button>
+      </span>
+    );
+  } else if (hasDraft) {
+    content = (
+      <span style={{ ...style, color: 'var(--color-success-700)' }}>
+        <Check size={14} aria-hidden /> {isRu ? 'Сохранено' : 'Saqlandi'}
+      </span>
+    );
+  } else {
+    content = <span style={{ ...style, color: 'var(--color-text-tertiary)' }}>{isRu ? 'Сохраняется автоматически' : 'Avtomatik saqlanadi'}</span>;
+  }
+  return <div aria-live="polite">{content}</div>;
+}
 
-/** Where a posted opening balance can be seen in the rest of the system. */
-function PostedLinks({ isRu }: { isRu: boolean }) {
+/** Where a posted opening balance can be seen, and the way to fix it. */
+function PostedLinks({ isRu, onFix }: { isRu: boolean; onFix: () => void }) {
   const links = [
     { href: '/finance', label: isRu ? 'Кассы и банк' : 'Kassa va bank' },
     { href: '/inventory', label: isRu ? 'Остатки на складах' : 'Ombor qoldiqlari' },
@@ -1221,12 +1272,19 @@ function PostedLinks({ isRu }: { isRu: boolean }) {
     { href: '/accounting/journal', label: isRu ? 'Журнал проводок' : 'Buxgalteriya jurnali' },
   ];
   return (
-    <div role="note" data-testid="opening-balance-posted-links" style={{ marginTop: 'var(--space-3)', display: 'flex', flexDirection: 'column', gap: 'var(--space-2)', fontSize: 'var(--text-sm)', color: 'var(--color-text-secondary)' }}>
-      <span>
-        {isRu
-          ? 'Остатки проведены, здесь их можно только посмотреть. Нашли ошибку — нажмите «Исправить», поправьте и проведите снова.'
-          : 'Qoldiqlar tasdiqlangan, bu yerda faqat ko‘rish mumkin. Xato topsangiz — «Tuzatish»ni bosing, to‘g‘rilang va qayta tasdiqlang.'}
-      </span>
+    <div role="note" data-testid="opening-balance-posted-links" className="ob-posted">
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 'var(--space-3)', flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-flex', gap: 8, alignItems: 'flex-start' }}>
+          <CheckCircle2 size={18} color="var(--color-success-700)" style={{ flexShrink: 0, marginTop: 1 }} aria-hidden />
+          {isRu
+            ? 'Остатки проведены — здесь их можно только посмотреть. Нашли ошибку? Нажмите «Исправить».'
+            : 'Qoldiqlar tasdiqlangan — bu yerda faqat ko‘rish mumkin. Xato topdingizmi? «Tuzatish»ni bosing.'}
+        </span>
+        <Button variant="secondary" size="sm" onClick={onFix}>
+          <RotateCcw size={14} aria-hidden />
+          <span>{isRu ? 'Исправить' : 'Tuzatish'}</span>
+        </Button>
+      </div>
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-4)', flexWrap: 'wrap' }}>
         <span>{isRu ? 'Где их видно:' : 'Qayerda ko‘rinadi:'}</span>
         {links.map((link) => (
@@ -1240,30 +1298,53 @@ function PostedLinks({ isRu }: { isRu: boolean }) {
   );
 }
 
-function SubledgerCard({ title, hint, isReadOnly, onAdd, addText, children }: {
+/**
+ * One section: a numbered question, a one-line hint, its rows and the add
+ * button under them. Empty optional sections fold to the question and the
+ * add button.
+ */
+function Section({ n, title, hint, count, summary, optional, isReadOnly, isRu, onAdd, addText, emptyText, children }: {
+  n: number;
   title: string;
-  hint: string | null;
+  hint: string;
+  count: number;
+  summary: string | null;
+  optional?: boolean;
   isReadOnly: boolean;
+  isRu: boolean;
   onAdd: () => void;
   addText: string;
+  emptyText: string | null;
   children: React.ReactNode;
 }) {
+  const headingId = `ob-section-${n}`;
   return (
-    <Card style={{ padding: 0, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: 'var(--space-4) var(--space-5)', borderBottom: '1px solid var(--color-border-light)', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: 'var(--text-base)', fontWeight: 600, color: 'var(--color-text-primary)' }}>{title}</h3>
-          {hint && <p style={{ margin: '4px 0 0', fontSize: 'var(--text-xs)', color: 'var(--color-text-tertiary)' }}>{hint}</p>}
+    <section className="ob-section" aria-labelledby={headingId} data-empty={count === 0 ? 'true' : undefined}>
+      <header className="ob-section-head">
+        <span className="ob-section-num" data-done={count > 0 ? 'true' : undefined} aria-hidden>
+          {count > 0 ? <Check size={14} /> : n}
+        </span>
+        <div style={{ minWidth: 0, flex: '1 1 260px' }}>
+          <h2 id={headingId} className="ob-h2">
+            {title}
+            {optional && <span className="ob-optional">{isRu ? 'если есть' : 'bo‘lsa'}</span>}
+          </h2>
+          <p className="ob-field-hint" style={{ margin: '2px 0 0' }}>{hint}</p>
         </div>
-        {!isReadOnly && (
-          <Button variant="secondary" size="sm" onClick={onAdd} style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Plus size={14} />
+        {summary && <span className="ob-section-sum tabular-nums">{summary}</span>}
+      </header>
+      {count > 0 && <div className="ob-section-body">{children}</div>}
+      {count === 0 && isReadOnly && <p className="ob-section-empty">{isRu ? 'Не заполнено' : 'Kiritilmagan'}</p>}
+      {!isReadOnly && (
+        <div className="ob-section-foot">
+          <Button variant="secondary" size="sm" onClick={onAdd}>
+            <Plus size={14} aria-hidden />
             <span>{addText}</span>
           </Button>
-        )}
-      </div>
-      <div style={{ overflowX: 'auto' }}>{children}</div>
-    </Card>
+          {count === 0 && emptyText && <span className="ob-field-hint">{emptyText}</span>}
+        </div>
+      )}
+    </section>
   );
 }
 
@@ -1277,21 +1358,14 @@ function CashTable({ lines, isReadOnly, accounts, locale, isRu, onUpdate, onRemo
     <table style={tableStyle}>
       <thead style={theadStyle}>
         <tr>
-          <th style={th({ width: '40px' })}>#</th>
           <th style={th({ minWidth: '260px' })}>{isRu ? 'Касса / счёт' : 'Kassa / hisob'}</th>
-          <th style={th({ width: '90px' })}>{isRu ? 'Валюта' : 'Valyuta'}</th>
-          <th style={th({ minWidth: '180px', textAlign: 'right' })}>{isRu ? 'Остаток' : 'Qoldiq'}</th>
-          <th style={th({ minWidth: '200px' })}>{isRu ? 'Примечание' : 'Izoh'}</th>
+          <th style={th({ minWidth: '220px', textAlign: 'right' })}>{isRu ? 'Сколько денег' : 'Qancha pul'}</th>
           {!isReadOnly && <th style={th({ width: '50px' })}></th>}
         </tr>
       </thead>
       <tbody>
-        {filtered.length === 0 ? (
-          <EmptyRow colSpan={6} text={isRu ? 'Пока пусто. Нажмите «Добавить кассу». Денег нет — пропустите раздел.' : 'Hozircha bo‘sh. «Kassa qo‘shish»ni bosing. Pul bo‘lmasa, bo‘limni o‘tkazib yuboring.'} />
-        ) : (
-          filtered.map(({ line, index }, pos) => (
+        {filtered.map(({ line, index }) => (
             <tr key={index} style={rowStyle}>
-              <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
               <td style={td}>
                 <Select
                   value={line.accountId || ''}
@@ -1305,7 +1379,7 @@ function CashTable({ lines, isReadOnly, accounts, locale, isRu, onUpdate, onRemo
                       onUpdate(index, 'category', account.accountType === 'BANK' ? 'BANK' : 'CASH');
                     }
                   }}
-                  style={{ width: '100%', maxWidth: '320px' }}
+                  style={{ width: '100%', minWidth: 240 }}
                   options={[
                     { value: '', label: isRu ? 'Выберите кассу/банк' : 'Kassa yoki bankni tanlang' },
                     ...usable.map((account) => ({
@@ -1318,9 +1392,6 @@ function CashTable({ lines, isReadOnly, accounts, locale, isRu, onUpdate, onRemo
                   ]}
                 />
               </td>
-              <td style={td}>
-                <Badge variant="neutral">{line.currency || '—'}</Badge>
-              </td>
               <td style={{ ...td, textAlign: 'right' }}>
                 <CurrencyInput
                   value={line.amount || ''}
@@ -1330,16 +1401,14 @@ function CashTable({ lines, isReadOnly, accounts, locale, isRu, onUpdate, onRemo
                   decimals={2}
                   placeholder="0"
                   className="tabular-nums"
+                  aria-label={isRu ? 'Сумма' : 'Summa'}
                   style={field('180px', { fontWeight: 600, textAlign: 'right' })}
                 />
-              </td>
-              <td style={td}>
-                <NotesInput line={line} index={index} isReadOnly={isReadOnly} isRu={isRu} onUpdate={onUpdate} />
+                <span style={{ display: 'inline-block', minWidth: 36, marginLeft: 8, color: 'var(--color-text-secondary)', textAlign: 'left' }}>{line.currency || ''}</span>
               </td>
               <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
             </tr>
-          ))
-        )}
+          ))}
       </tbody>
     </table>
   );
@@ -1364,7 +1433,6 @@ function InventoryTable({
     <table style={tableStyle}>
       <thead style={theadStyle}>
         <tr>
-          <th style={th({ width: '40px' })}>#</th>
           <th style={th({ minWidth: '240px' })}>{isRu ? 'Товар' : 'Tovar'}</th>
           {warehouses.length > 1 && <th style={th({ minWidth: '180px' })}>{isRu ? 'Склад' : 'Ombor'}</th>}
           <th style={th({ width: '120px', textAlign: 'right' })}>{isRu ? 'Количество' : 'Miqdor'}</th>
@@ -1375,12 +1443,8 @@ function InventoryTable({
         </tr>
       </thead>
       <tbody>
-        {filtered.length === 0 ? (
-          <EmptyRow colSpan={8} text={isRu ? 'Пока пусто. Нажмите «Добавить товар» или загрузите список из Excel.' : 'Hozircha bo‘sh. «Tovar qo‘shish»ni bosing yoki ro‘yxatni Exceldan yuklang.'} />
-        ) : (
-          filtered.map(({ line, index }, pos) => (
+        {filtered.map(({ line, index }) => (
             <tr key={index} style={rowStyle}>
-              <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
               <td style={td}>
                 <Select
                   value={line.productId || ''}
@@ -1450,8 +1514,7 @@ function InventoryTable({
               </td>
               <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
             </tr>
-          ))
-        )}
+          ))}
       </tbody>
     </table>
   );
@@ -1482,26 +1545,20 @@ function DebtsTable({
     <table style={tableStyle}>
       <thead style={theadStyle}>
         <tr>
-          <th style={th({ width: '40px' })}>#</th>
           <th style={th({ width: '240px' })}>{isRu ? 'Кто кому должен' : 'Kim kimga qarz'}</th>
-          <th style={th({ minWidth: '240px' })}>{isRu ? 'Контрагент' : 'Kontragent'}</th>
-          <th style={th({ width: '100px' })}>{isRu ? 'Валюта' : 'Valyuta'}</th>
+          <th style={th({ minWidth: '240px' })}>{isRu ? 'Клиент или поставщик' : 'Mijoz yoki yetkazib beruvchi'}</th>
           <th style={th({ minWidth: '180px', textAlign: 'right' })}>{isRu ? 'Сумма' : 'Summa'}</th>
-          <th style={th({ minWidth: '160px' })}>{isRu ? 'Договор №' : 'Shartnoma №'}</th>
+          <th style={th({ width: '110px' })}>{isRu ? 'Валюта' : 'Valyuta'}</th>
           {!isReadOnly && <th style={th({ width: '50px' })}></th>}
         </tr>
       </thead>
       <tbody>
-        {filtered.length === 0 ? (
-          <EmptyRow colSpan={7} text={isRu ? 'Пока пусто. Нажмите «Добавить строку»: одна строка — один клиент или поставщик.' : 'Hozircha bo‘sh. «Qator qo‘shish»ni bosing: bitta qator — bitta mijoz yoki yetkazib beruvchi.'} />
-        ) : (
-          filtered.map(({ line, index }, pos) => {
+        {filtered.map(({ line, index }) => {
             const kind = line.category as CounterpartyLineKind;
             const side = COUNTERPARTY_LINE_KINDS[kind].side;
             const isAsset = kind === 'CUSTOMER_DEBT' || kind === 'SUPPLIER_ADVANCE';
             return (
               <tr key={index} style={rowStyle}>
-                <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
                 <td style={td}>
                   <Select value={kind} disabled={isReadOnly} onChange={(value) => onUpdate(index, 'category', value)} style={{ width: '100%' }} options={kindOptions} />
                 </td>
@@ -1524,15 +1581,6 @@ function DebtsTable({
                     ]}
                   />
                 </td>
-                <td style={td}>
-                  <Select
-                    options={CURRENCY_OPTIONS}
-                    value={line.currency || ''}
-                    placeholder={isRu ? 'Валюта' : 'Valyuta'}
-                    disabled={isReadOnly}
-                    onChange={(currency) => onUpdate(index, 'currency', currency)}
-                  />
-                </td>
                 <td style={{ ...td, textAlign: 'right' }}>
                   <CurrencyInput
                     value={line.amount || ''}
@@ -1546,20 +1594,18 @@ function DebtsTable({
                   />
                 </td>
                 <td style={td}>
-                  <input
-                    type="text"
-                    value={line.contractNumber || ''}
+                  <Select
+                    options={CURRENCY_OPTIONS}
+                    value={line.currency || ''}
+                    placeholder={isRu ? 'Валюта' : 'Valyuta'}
                     disabled={isReadOnly}
-                    onChange={(e) => onUpdate(index, 'contractNumber', e.target.value)}
-                    placeholder={isRu ? 'Необязательно' : 'Ixtiyoriy'}
-                    style={field('100%')}
+                    onChange={(currency) => onUpdate(index, 'currency', currency)}
                   />
                 </td>
                 <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
               </tr>
             );
-          })
-        )}
+          })}
       </tbody>
     </table>
   );
@@ -1581,10 +1627,19 @@ function FixedAssetsTable({
   const filtered = linesWhere(lines, (l) => l.category === 'FIXED_ASSET');
 
   return (
+    <>
+    {/* B6 / D6: depreciation is not computed by the system after posting. */}
+    <p
+      data-testid="fixed-asset-depreciation-notice"
+      style={{ margin: '0 0 var(--space-3)', padding: 'var(--space-3)', borderRadius: 'var(--radius-md)', background: 'var(--color-warning-50)', color: 'var(--color-warning-700)', fontSize: 'var(--text-sm)' }}
+    >
+      {isRu
+        ? 'Выберите из списка или нажмите «Новое средство» и впишите цену покупки и износ (кнопка «Рассчитать» посчитает). Амортизация не рассчитывается автоматически и после проведения.'
+        : 'Ro‘yxatdan tanlang yoki «Yangi asosiy vosita»ni bosib, sotib olingan narxi va eskirishini yozing («Hisoblash» tugmasi hisoblab beradi). Eskirish tizimda avtomatik hisoblanmaydi, tasdiqlangandan keyin ham.'}
+    </p>
     <table style={tableStyle}>
       <thead style={theadStyle}>
         <tr>
-          <th style={th({ width: '40px' })}>#</th>
           <th style={th({ minWidth: '260px' })}>{isRu ? 'Что это' : 'Nima'}</th>
           <th style={th({ width: '140px' })}>{isRu ? 'Инв. номер' : 'Inv. raqam'}</th>
           <th style={th({ width: '160px', textAlign: 'right' })}>{isRu ? 'Купили за' : 'Olingan narxi'}</th>
@@ -1594,10 +1649,7 @@ function FixedAssetsTable({
         </tr>
       </thead>
       <tbody>
-        {filtered.length === 0 ? (
-          <EmptyRow colSpan={7} text={isRu ? 'Пока пусто. Если оборудования и зданий нет — пропустите раздел.' : 'Hozircha bo‘sh. Uskuna va bino bo‘lmasa, bo‘limni o‘tkazib yuboring.'} />
-        ) : (
-          filtered.map(({ line, index }, pos) => {
+        {filtered.map(({ line, index }) => {
             const initCost = Number(line.amount || 0);
             const accDep = Number(line.accumulatedDepreciation || 0);
             const netBookValue = Math.max(0, initCost - accDep);
@@ -1605,7 +1657,6 @@ function FixedAssetsTable({
             const overDepreciated = accDep > initCost;
             return (
               <tr key={index} style={rowStyle}>
-                <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
                 <td style={td}>
                   <div data-testid="fixed-asset-register-select">
                     <Select
@@ -1643,10 +1694,10 @@ function FixedAssetsTable({
                 <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
               </tr>
             );
-          })
-        )}
+          })}
       </tbody>
     </table>
+    </>
   );
 }
 
@@ -1800,7 +1851,6 @@ function OtherTable({ lines, isReadOnly, isRu, onUpdate, onRemove }: SubledgerTa
     <table style={tableStyle}>
       <thead style={theadStyle}>
         <tr>
-          <th style={th({ width: '40px' })}>#</th>
           <th style={th({ width: '240px' })}>{isRu ? 'Что это' : 'Nima'}</th>
           <th style={th({ minWidth: '220px' })}>{isRu ? 'Описание' : 'Tavsif'}</th>
           <th style={th({ minWidth: '180px', textAlign: 'right' })}>{isRu ? 'Сумма (UZS)' : 'Summa (UZS)'}</th>
@@ -1808,12 +1858,8 @@ function OtherTable({ lines, isReadOnly, isRu, onUpdate, onRemove }: SubledgerTa
         </tr>
       </thead>
       <tbody>
-        {filtered.length === 0 ? (
-          <EmptyRow colSpan={5} text={isRu ? 'Пусто — это нормально. Капитал посчитается сам.' : 'Bo‘sh — bu normal. Kapital o‘zi hisoblanadi.'} />
-        ) : (
-          filtered.map(({ line, index }, pos) => (
+        {filtered.map(({ line, index }) => (
             <tr key={index} style={rowStyle}>
-              <td style={{ ...td, color: 'var(--color-text-tertiary)' }}>{pos + 1}</td>
               <td style={td}>
                 <Select
                   value={line.category ?? ''}
@@ -1851,8 +1897,7 @@ function OtherTable({ lines, isReadOnly, isRu, onUpdate, onRemove }: SubledgerTa
               </td>
               <RemoveCell isReadOnly={isReadOnly} isRu={isRu} onClick={() => onRemove(index)} />
             </tr>
-          ))
-        )}
+          ))}
       </tbody>
     </table>
   );

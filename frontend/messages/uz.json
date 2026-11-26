@@ -919,12 +919,6 @@
       "stepWorkHint": "Xomashyo chiqarilgan, mahsulot hali omborga kirmagan",
       "showThese": "Ro‘yxatda ko‘rsatish"
     },
-    "ob": {
-      "sections": "Bo‘limlar",
-      "linesCount": "{count, plural, other {# ta qator}}",
-      "stepsHint": "Kerakli bo‘limlarni to‘ldiring — bo‘sh qolgan bo‘lim nolga teng deb olinadi. Kapital o‘zi hisoblanadi.",
-      "nextSection": "Keyingi: {name}"
-    },
     "acc": {
       "check": "Balans tekshiruvi",
       "checkOk": "Barcha provodkalar juft — xato yo‘q",

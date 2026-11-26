@@ -4,6 +4,7 @@ import {
   counterpartiesForKind,
   documentUsdRate,
   needsUsdRate,
+  openingBalanceSaveBlocker,
   suggestedStraightLineDepreciation,
   withDocumentRate,
 } from './opening-balance-lines.ts';
@@ -91,4 +92,22 @@ test('a USD line without a rate is left out of the totals and flagged', () => {
   const totals = computeOpeningBalanceTotals([{ category: 'CASH', amount: 10, currency: 'USD', exchangeRate: '' }]);
   assert.equal(totals.totalAssets, 0);
   assert.equal(totals.hasValidCurrencyRates, false);
+});
+
+test('autosave waits for a currency on every line, then for the USD rate', () => {
+  assert.equal(openingBalanceSaveBlocker([], ''), null);
+  assert.deepEqual(
+    openingBalanceSaveBlocker(
+      [
+        { category: 'INVENTORY', currency: '' },
+        { category: 'CUSTOMER_DEBT', currency: null },
+        { category: 'INVENTORY', currency: ' ' },
+        { category: 'CASH', currency: 'UZS' },
+      ],
+      '',
+    ),
+    { kind: 'currency', categories: ['INVENTORY', 'CUSTOMER_DEBT'] },
+  );
+  assert.deepEqual(openingBalanceSaveBlocker([{ category: 'CASH', currency: 'USD' }], ''), { kind: 'usdRate' });
+  assert.equal(openingBalanceSaveBlocker([{ category: 'CASH', currency: 'USD' }], '12500'), null);
 });
